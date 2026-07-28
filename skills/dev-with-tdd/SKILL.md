@@ -1,0 +1,157 @@
+---
+name: dev-with-tdd
+description: 作为内部执行 worker，依据已批准且版本完整的 Execution Packet，一次只执行一个 feature 的功能开发、bug 修复、重构、UI/UX、配置、数据或仓库小改；自行完成适用的 Red-Green-Refactor 或已批准的 TDD-not-required 窄验证，并返回结构化执行证据。只在 Coordinator 明确派发并要求加载本技能时使用；不得接受原始自然语言任务、拆分任务、申请审批、维护项目导航信息或承担最终审查与临时目录清理。
+---
+
+# TDD 单任务执行器
+
+本技能是内部执行 worker。一次只执行一个 feature，只接受有效的版本化 Execution Packet；不得接受原始自然语言任务，不自行规划或申请审批，不创建其他 worker。
+
+## 通用规则
+
+- 所有自然语言默认使用简体中文；英文仅用于代码、标识符、API 字段、路径、命令、配置值、精确错误和必要技术字面量。
+- 遵循仓库指令、现有代码结构和最小正确变更原则。
+- 读取 [references/tdd-scope.md](references/tdd-scope.md) 判定 TDD 证据要求。
+- 任务包摘要仅用于定位；开始实现前读取允许范围内的真实代码、测试和项目指令，以真实代码为准。
+- 只报告执行观察，不决定导航索引、全局范围、最终验收或资源回收。
+
+## 1. 校验 Execution Packet
+
+只接受包含以下字段的任务包：
+
+```text
+Required skill: dev-with-tdd
+Approval state: approved
+Plan version:
+Context version:
+Task version:
+Task ID:
+Task workspace:
+Goal:
+Acceptance criteria:
+In scope:
+Out of scope:
+Dependencies:
+Shared interfaces:
+Allowed write paths:
+Allowed discovery paths:
+Forbidden paths:
+Forbidden side effects:
+Stop conditions:
+Project Context:
+  Source fingerprint:
+  Relevant map entries:
+  Applicable constraints:
+  Local overrides:
+  Verified source paths:
+  Relevant tests:
+  Code evidence:
+Workspace Context:
+  Baseline fingerprint:
+  Relevant file fingerprints:
+  Existing user changes:
+TDD classification: required | not required
+Red test plan:
+Green implementation plan:
+Focused verification:
+Expanded verification:
+Language check: passed
+```
+
+拒绝字段缺失、审批不是 `approved`、版本含糊、一个 packet 含多个 feature 或 `Required skill` 不匹配的任务包。不得接收完整项目地图，不得接收完整 transcript、原始全量日志或无关代码。
+
+修改前必须返回并等待 Coordinator 校验以下确认：
+
+```text
+Loaded skill: dev-with-tdd
+Plan version:
+Context version:
+Task version:
+Task ID:
+Approval inherited: yes
+```
+
+确认完成前不得修改任何文件。版本或 Task ID 不一致时停止，不猜测正确版本。
+
+## 2. 受控发现与范围锁定
+
+- 可读取 `Allowed discovery paths` 指定的路径、目标文件直接依赖、相关测试和适用项目指令，以验证真实行为。
+- 只加载当前 feature 所需的上下文，不主动扫描整个仓库。
+- 只能修改 `Allowed write paths`，并避开 `Forbidden paths` 与 `Forbidden side effects`。
+- 保留 `Existing user changes`，不得覆盖、重置或顺手整理无关改动。
+- 发现摘要与代码不一致时记录 `Context deviations`；不得把摘要当作代码快照。
+
+信息不足但只需补充只读上下文时，停止并返回：
+
+```text
+Status: context_gap
+Missing context:
+Why required:
+Requested read paths:
+Potential write impact:
+Approval impact: none | replan_required
+```
+
+必须写入未授权路径，或需要改变验收标准、公共接口、依赖、迁移、安全影响、外部副作用时，返回：
+
+```text
+Status: needs_replan
+Reason:
+Required scope change:
+Approval impact: replan_required
+```
+
+不得猜测或扩大范围。
+
+## 3. 执行
+
+任务包的 TDD 分类是已批准约束。若真实代码证明分类不安全，返回 `needs_replan`，不得自行降低测试要求。
+
+### TDD required
+
+由当前 worker 亲自完成：
+
+1. `Red`：先添加能因目标行为缺失或 bug 存在而失败的测试，运行并记录命令、退出码和关键失败原因。
+2. `Green`：做符合项目结构的最小实现，使聚焦测试通过。
+3. `Refactor`：仅在有明确结构收益时整理，并持续保持测试通过。
+4. 执行 `Focused verification` 和适度的 `Expanded verification`。
+
+Red 必须直接证明目标行为缺失或 bug 存在。无法获得可信 Red 时停止；不得弱化测试、伪造执行记录或先实现后补写 Red。
+
+### TDD not required
+
+只执行任务包已批准的非行为窄变更，并运行适用的 diff、语法、schema、链接、拼写、渲染、snapshot、parser、build 或文件属性验证。若实际影响运行、布局、解析、输出或公共契约，返回 `needs_replan`。
+
+## 4. Execution Handoff
+
+完成或停止时返回紧凑证据：
+
+```text
+Execution Handoff
+Task ID:
+Plan version:
+Context version:
+Task version:
+Changed paths:
+Red evidence:
+Green verification:
+Expanded verification:
+Context deviations:
+Resource location changes:
+Constraint changes observed:
+Assumptions:
+Remaining risks:
+Status: completed | blocked | context_gap | needs_replan
+Language check: passed
+```
+
+`Resource location changes` 和 `Constraint changes observed` 只报告观察结果，不执行外部状态决策。原始日志仅写入 packet 指定的 `Task workspace`；handoff 只保留关键错误、结论和必要恢复信息。
+
+## 安装与同步边界
+
+仅在用户明确授权 skill 维护、安装或同步时：
+
+- `~/.agents/skills/dev-with-tdd` 为 canonical。
+- `~/.codex/skills/dev-with-tdd` 为独立同步副本。
+- `~/.claude/skills/dev-with-tdd`、`~/.claudeD/skills/dev-with-tdd`、`~/.claudeP/skills/dev-with-tdd` 必须是指向 canonical 的软链接。
+- 不处理其他位置、hooks、配置或其他 skill。

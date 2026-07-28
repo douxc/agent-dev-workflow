@@ -1,0 +1,7 @@
+interface:
+  display_name: "开发任务规划与协调"
+  short_description: "规划并审批开发任务，自动调度执行、审查和维护项目地图"
+  default_prompt: "使用 $plan-dev-tasks 分析并分级这个开发需求，生成任务包，审批后自动协调执行。"
+
+policy:
+  allow_implicit_invocation: true
