@@ -11,7 +11,7 @@ description: 作为唯一面向用户和隐式触发的开发入口及 Coordinat
 
 - 面向用户及 agent 间的自然语言默认使用简体中文；英文仅用于代码、标识符、API 字段、路径、命令、配置值、精确错误和必要技术术语。
 - 代码、测试和仓库指令是事实来源；`project-map.md` 只用于快速定位。
-- 读取 [references/project-map.md](references/project-map.md)、[references/task-packet.md](references/task-packet.md)、[references/task-workspace.md](references/task-workspace.md)；最终验收时读取 [references/review-checklist.md](references/review-checklist.md)。
+- 读取 [references/project-map.md](references/project-map.md)、[references/task-packet.md](references/task-packet.md)、[references/task-workspace.md](references/task-workspace.md)；请求审批前读取 [references/human-approval.md](references/human-approval.md)；最终验收时读取 [references/review-checklist.md](references/review-checklist.md)。
 - 规划前只做只读检查；需要保存计划或日志时，按 task workspace 契约创建项目内临时目录。
 - 同一版本化任务包只申请一次 human approval；worker 继承审批，不得重复申请。
 
@@ -74,13 +74,9 @@ Coordinator 保存地图与工作区基线 fingerprint，用于最终检查并�
 
 发布版本化计划，至少包含任务摘要、级别、`Plan version`、`Context version`、`Task version`、各 packet、依赖、串并行顺序、风险、验证和范围外事项。检查验收映射、写入冲突、TDD 计划、真实代码证据、UI/UX 一致性和最小变更。
 
-请求：
+严格执行 [references/human-approval.md](references/human-approval.md)：根据当前工具注册表与运行时元数据识别 Codex、Claude Code 或 Hermes，使用该平台规定的原生审批入口，并把响应认证为绑定三个版本的 `approved | revise | cancel | blocked`。平台未知、信号冲突或所需交互能力缺失时 fail closed；不得使用共享通用审批或跨平台工具。
 
-1. `批准并继续 (Recommended)`
-2. `修改计划`
-3. `取消任务`
-
-优先使用平台原生结构化选择；不可用时才要求文本回复。沉默、超时或含糊同意不算批准。
+审批选择的规范文案为 `批准并继续 (Recommended)`、`修改计划`、`取消任务`。同一版本只请求一次审批；沉默、超时、工具拒绝、取消或模糊回答均不得视为批准。只有认证后的 `approved` 可以进入自动调度。
 
 批准覆盖完整版本。新增 feature，或改变验收标准、公共接口、依赖、迁移、安全影响、外部副作用或允许写入范围时，旧批准立即失效并重新规划。批准范围内的实现细节调整不重新审批。
 

@@ -18,6 +18,12 @@ class PlanDevTasksContractTest(unittest.TestCase):
         cls.workspace = read("references/task-workspace.md")
         cls.packet = read("references/task-packet.md")
         cls.review = read("references/review-checklist.md")
+        cls.approval_path = ROOT / "references/human-approval.md"
+        cls.approval = (
+            cls.approval_path.read_text(encoding="utf-8")
+            if cls.approval_path.exists()
+            else ""
+        )
         cls.metadata = read("agents/openai.yaml")
 
     def assert_all(self, text: str, values: tuple[str, ...]) -> None:
@@ -47,6 +53,129 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "同一版本化任务包只申请一次 human approval",
                 "批准并继续 (Recommended)",
                 "Approval state: approved",
+            ),
+        )
+
+    def test_human_approval_reference_replaces_generic_fallback(self) -> None:
+        self.assertTrue(self.approval_path.is_file())
+        self.assertIn(
+            "[references/human-approval.md](references/human-approval.md)",
+            self.skill,
+        )
+        self.assertNotIn(
+            "优先使用平台原生结构化选择；不可用时才要求文本回复",
+            self.skill,
+        )
+
+    def test_human_approval_platform_detection_is_explicit_and_fail_closed(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "当前工具注册表",
+                "运行时元数据",
+                "不得通过 `HOME` 目录",
+                "平台签名冲突",
+                "未知平台",
+                "unsupported platform",
+                "conflicting platform",
+                "fail closed",
+                "不得使用共享通用审批",
+            ),
+        )
+
+    def test_codex_approval_uses_request_user_input_or_exact_default_text(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "Codex",
+                "`request_user_input`",
+                "当前可用",
+                "只能调用一次",
+                "单选",
+                "不得设置 `autoResolutionMs`",
+                "Default mode",
+                "Codex 专属精确文本选择",
+                "`批准并继续`",
+                "`修改计划`",
+                "`取消任务`",
+                "不得自动批准",
+            ),
+        )
+
+    def test_codex_default_exact_text_is_the_only_free_text_exception(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "第 3 节 Codex Default mode 的精确文本选择除外",
+                "`批准并继续` → `approved`",
+                "`修改计划` → `revise`",
+                "`取消任务` → `cancel`",
+                "其他任何自由文本",
+            ),
+        )
+
+    def test_claude_code_approval_uses_plan_specific_tools(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "Claude Code",
+                "`ExitPlanMode`",
+                "Plan mode",
+                "`AskUserQuestion`",
+                "非 Plan",
+                "非交互宿主",
+                "`blocked`",
+                "不得借用 Codex 或 Hermes",
+            ),
+        )
+        self.assertRegex(
+            self.approval,
+            r"Plan mode.*`ExitPlanMode`|`ExitPlanMode`.*Plan mode",
+        )
+
+    def test_hermes_approval_uses_clarify_not_command_approval(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "Hermes",
+                "`clarify`",
+                "`clarify.respond`",
+                "`approval.request`",
+                "`approval.respond`",
+                "危险命令",
+                "未注册",
+                "`blocked`",
+            ),
+        )
+        self.assertRegex(
+            self.approval,
+            r"不得[^。\n]*`approval\.request`[^。\n]*`approval\.respond`",
+        )
+
+    def test_platform_approval_branches_forbid_cross_tool_fallback(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "Codex 分支不得调用 Claude Code 或 Hermes 工具",
+                "Claude Code 分支不得借用 Codex 或 Hermes 的审批入口",
+                "Hermes 分支不得调用 Codex 或 Claude Code 工具",
+            ),
+        )
+
+    def test_approval_decision_is_authenticated_versioned_and_single_use(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "`approved | revise | cancel | blocked`",
+                "`Plan version`",
+                "`Context version`",
+                "`Task version`",
+                "只有 `approved`",
+                "沉默",
+                "超时",
+                "工具拒绝",
+                "模糊回答",
+                "同一版本只请求一次审批",
             ),
         )
 
