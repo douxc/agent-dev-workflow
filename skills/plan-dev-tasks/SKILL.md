@@ -178,7 +178,8 @@ Coordinator 是 `project-map.md` 的唯一写入者。依据最终实际 diff �
 
 仅在用户明确授权 skill 维护、安装或同步时：
 
+- 两套 skill 必须成对、同版本安装。
 - `~/.agents/skills/plan-dev-tasks` 为 canonical。
-- `~/.codex/skills/plan-dev-tasks` 为独立同步副本。
-- `~/.claude/skills/plan-dev-tasks`、`~/.claudeD/skills/plan-dev-tasks`、`~/.claudeP/skills/plan-dev-tasks` 必须是指向 canonical 的软链接。
+- 仅当平台根目录已经存在时，才在 `.claude`、`.claudeD`、`.claudeP`、`.codex`、`.hermes` 的 `skills/` 下创建指向 canonical 的绝对软链接；不得创建缺失的平台根目录。
+- 替换既有 canonical 或冲突的链接目标前必须先创建唯一的同级备份；正确的现有软链接保持不变。
 - 不处理其他位置、hooks、配置或其他 skill。

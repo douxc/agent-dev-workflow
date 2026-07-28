@@ -13,44 +13,26 @@ $plan-dev-tasks
 
 不要直接向 `$dev-with-tdd` 提交自然语言开发需求；它只接受由 Coordinator 派发、版本完整且已批准的 Execution Packet。
 
-## 安装到 Codex
+## 一键安装
 
-以下示例使用 Codex 随附的官方 skill 安装脚本，从 GitHub 仓库一次安装两套 skill。请将 `<owner>` 替换为实际仓库所有者：
-
-```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
-  --repo <owner>/agent-dev-workflow \
-  --path skills/plan-dev-tasks skills/dev-with-tdd
-```
-
-安装后可在下一个任务中使用。两套 skill 必须保持来自同一版本，不要只更新其中一套。
-
-## 安装到 Claude
-
-先克隆仓库：
+克隆仓库后运行根目录脚本。请将 `<owner>` 替换为实际仓库所有者：
 
 ```bash
 git clone https://github.com/<owner>/agent-dev-workflow.git
 cd agent-dev-workflow
+./install.sh
 ```
 
-手工复制：
+脚本始终将两套 skill 成对复制到 canonical 位置：
 
-```bash
-mkdir -p "$HOME/.claude/skills"
-cp -R skills/plan-dev-tasks "$HOME/.claude/skills/"
-cp -R skills/dev-with-tdd "$HOME/.claude/skills/"
+```text
+~/.agents/skills/plan-dev-tasks
+~/.agents/skills/dev-with-tdd
 ```
 
-或者创建软链接，便于后续在仓库内统一更新：
+随后脚本检查 `~/.claude`、`~/.claudeD`、`~/.claudeP`、`~/.codex` 与 `~/.hermes`。仅当平台根目录已经存在时，才创建其 `skills/` 子目录，并为两套 skill 创建指向 canonical 位置的绝对软链接；平台根目录不存在时输出 `skip`，不会代为创建。
 
-```bash
-mkdir -p "$HOME/.claude/skills"
-ln -s "$(pwd)/skills/plan-dev-tasks" "$HOME/.claude/skills/plan-dev-tasks"
-ln -s "$(pwd)/skills/dev-with-tdd" "$HOME/.claude/skills/dev-with-tdd"
-```
-
-如果目标位置已存在，请先确认其内容和来源，再选择覆盖、备份或改用新的克隆目录。安装或更新时始终同时处理两个 skill。
+脚本可以重复运行。正确的现有软链接保持不变；既有 canonical 安装或冲突的链接目标会先移动到同级的唯一 `.backup.<时间戳>.<进程号>` 路径，再安装或建链，不会静默删除用户文件。空 `HOME`、`HOME=/`、不存在的 `HOME` 或缺少任一源 skill 时，脚本会在安装前失败。
 
 ## 仓库结构
 
@@ -58,10 +40,13 @@ ln -s "$(pwd)/skills/dev-with-tdd" "$HOME/.claude/skills/dev-with-tdd"
 .
 ├── .gitignore
 ├── README.md
+├── install.sh
 ├── project-map.md
-└── skills/
-    ├── plan-dev-tasks/
-    └── dev-with-tdd/
+├── skills/
+│   ├── plan-dev-tasks/
+│   └── dev-with-tdd/
+└── tests/
+    └── test_install.py
 ```
 
 `skills/` 下的内容是发布副本，不应在打包过程中单独改写。行为契约和测试随各 skill 一并发布。
@@ -71,6 +56,8 @@ ln -s "$(pwd)/skills/dev-with-tdd" "$HOME/.claude/skills/dev-with-tdd"
 可在仓库根目录运行：
 
 ```bash
-python -m unittest discover -s skills/plan-dev-tasks/tests
-python -m unittest discover -s skills/dev-with-tdd/tests
+python3 -m unittest tests.test_install -v
+python3 -m unittest discover -s skills/plan-dev-tasks/tests -v
+python3 -m unittest discover -s skills/dev-with-tdd/tests -v
+bash -n install.sh
 ```

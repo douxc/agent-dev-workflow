@@ -200,6 +200,21 @@ class PlanDevTasksContractTest(unittest.TestCase):
         )
         self.assertNotIn("/private/tmp", self.skill + self.workspace)
 
+    def test_installation_uses_canonical_pair_and_platform_links(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "两套 skill 必须成对、同版本安装",
+                "`~/.agents/skills/plan-dev-tasks` 为 canonical",
+                "仅当平台根目录已经存在",
+                "`.claude`、`.claudeD`、`.claudeP`、`.codex`、`.hermes`",
+                "绝对软链接",
+                "不得创建缺失的平台根目录",
+                "备份",
+            ),
+        )
+        self.assertNotIn("独立同步副本", self.skill)
+
     def test_language_contract(self) -> None:
         self.assert_all(self.skill + self.packet + self.review, ("默认使用简体中文", "Language check: passed"))
 
