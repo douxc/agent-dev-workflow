@@ -18,6 +18,12 @@ class PlanDevTasksContractTest(unittest.TestCase):
         cls.workspace = read("references/task-workspace.md")
         cls.packet = read("references/task-packet.md")
         cls.review = read("references/review-checklist.md")
+        cls.git_workflow_path = ROOT / "references/git-workflow.md"
+        cls.git_workflow = (
+            cls.git_workflow_path.read_text(encoding="utf-8")
+            if cls.git_workflow_path.exists()
+            else ""
+        )
         cls.approval_path = ROOT / "references/human-approval.md"
         cls.approval = (
             cls.approval_path.read_text(encoding="utf-8")
@@ -235,6 +241,228 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "不得包含完整 agent transcript",
             ),
         )
+
+    def test_git_workflow_is_shell_first_and_fail_closed(self) -> None:
+        self.assertTrue(self.git_workflow_path.is_file())
+        self.assertIn(
+            "[references/git-workflow.md](references/git-workflow.md)",
+            self.skill,
+        )
+        self.assert_all(
+            self.git_workflow,
+            (
+                "`scripts/git-workflow.sh`",
+                "prompt 负责决策和结构化参数",
+                "状态性 Git 或系统操作",
+                "shell runner",
+                "fail closed",
+                "不得临时拼接",
+                "单个只读发现命令",
+                "human approval",
+                "文件内容编辑",
+                "`key<TAB>value`",
+                "不得 `eval` 或 `source`",
+            ),
+        )
+
+    def test_git_repository_syncs_default_branch_before_analysis(self) -> None:
+        combined = self.skill + self.git_workflow
+        self.assert_all(
+            combined,
+            (
+                "Analysis Brief",
+                "`inspect`",
+                "`sync`",
+                "remote HEAD",
+                "`main`",
+                "`master`",
+                "fast-forward",
+                "`Base SHA`",
+                "`local-only`",
+                "dirty",
+                "ahead",
+                "diverged",
+                "detached",
+                "进行中的 Git 操作",
+                "不执行 reset、rebase 或 stash",
+            ),
+        )
+        self.assertRegex(
+            self.skill,
+            r"`inspect`.*Analysis Brief|Analysis Brief.*之前.*`inspect`",
+        )
+
+    def test_preapproval_sync_is_the_only_stateful_git_exception(self) -> None:
+        combined = self.skill + self.git_workflow
+        self.assert_all(
+            combined,
+            (
+                "唯一允许的状态性 Git 例外",
+                "feature approval 前",
+                "clean default branch",
+                "fetch",
+                "ff-only",
+                "branch、worktree、commit、push",
+                "批准前仍禁止",
+            ),
+        )
+        self.assertRegex(
+            self.skill,
+            r"除.*git-workflow\.md.*inspect.*sync.*唯一.*例外.*批准前只做只读检查",
+        )
+
+    def test_git_mode_uses_serial_branch_or_parallel_worktrees(self) -> None:
+        combined = self.skill + self.git_workflow + self.workspace
+        self.assert_all(
+            combined,
+            (
+                "`prepare-serial`",
+                "`prepare-parallel`",
+                "同一个 `Base SHA`",
+                "依赖串行 packet",
+                "共用一条 task branch",
+                "当前主 worktree",
+                "只调用一次",
+                "不创建 worktree",
+                "实际同时运行",
+                "无依赖",
+                "无写入冲突",
+                "${PROJECT_ROOT}/.tmp/<task-id>/worktrees/<packet-id>/",
+            ),
+        )
+
+    def test_parallel_shared_dependencies_are_explicit_and_safe(self) -> None:
+        combined = self.git_workflow + self.packet
+        self.assert_all(
+            combined,
+            (
+                "Shared dependency paths",
+                "`--share`",
+                "`node_modules`",
+                "目标存在",
+                "Git ignored",
+                "依赖定义",
+                "lockfile",
+                "fingerprint",
+                "manifest",
+                "改为串行",
+                "独立安装",
+                "构建输出",
+                "数据库",
+                "运行时状态",
+            ),
+        )
+
+    def test_packet_carries_versioned_git_context_and_side_effect_authority(self) -> None:
+        self.assert_all(
+            self.packet,
+            (
+                "Git Context:",
+                "Mode: local-only | serial | parallel",
+                "Project root:",
+                "Remote:",
+                "Default branch:",
+                "Base SHA:",
+                "Task branch:",
+                "Worktree:",
+                "Expected HEAD:",
+                "Expected default tip:",
+                "Expected remote tip:",
+                "Shared dependency paths:",
+                "Shared dependency fingerprints:",
+                "Git owner: Coordinator",
+                "Remote publish authorization: approved | denied",
+                "branch、worktree、commit、push",
+                "只保留本地 commit",
+            ),
+        )
+
+    def test_coordinator_owns_verify_commit_drift_and_push_lifecycle(self) -> None:
+        combined = self.skill + self.git_workflow + self.review
+        self.assert_all(
+            combined,
+            (
+                "worker 写入前",
+                "`verify`",
+                "`head`",
+                "与 `Expected HEAD` 精确匹配",
+                "worker handoff",
+                "Coordinator 独立 review",
+                "`commit`",
+                "Allowed write paths",
+                "一个 accepted packet 一个 commit",
+                "Coordinator metadata commit",
+                "完成前再次",
+                "默认分支相关路径",
+                "共享接口",
+                "`context_gap`",
+                "重新规划",
+                "`push`",
+                "expected remote tip",
+                "只推送 task branch",
+                "不自动 merge",
+                "force",
+                "共享分支",
+                "远端分支",
+                "PR/MR",
+            ),
+        )
+
+    def test_git_state_writes_remain_coordinator_owned(self) -> None:
+        combined = self.skill + self.git_workflow + self.packet
+        self.assert_all(
+            combined,
+            (
+                "Git owner: Coordinator",
+                "worker 不得",
+                "branch",
+                "worktree",
+                "commit",
+                "push",
+                "merge",
+                "rebase",
+                "cleanup",
+            ),
+        )
+
+    def test_parallel_cleanup_is_ordered_and_failure_preserves_state(self) -> None:
+        combined = self.skill + self.git_workflow + self.workspace + self.review
+        self.assert_all(
+            combined,
+            (
+                "`cleanup-parallel`",
+                "accepted commit",
+                "clean",
+                "先移除 worktree",
+                "task workspace",
+                "串行模式",
+                "失败或 drift",
+                "保留现场",
+                "正式 diff",
+                "任务脚本",
+                "日志",
+            ),
+        )
+
+    def test_readme_documents_provider_neutral_git_workflow(self) -> None:
+        readme = read("../../README.md")
+        self.assert_all(
+            readme,
+            (
+                "纯 Git workflow",
+                "任务开始前",
+                "默认分支",
+                "串行任务",
+                "不创建 worktree",
+                "并行任务",
+                "受控依赖软链接",
+                "shell-first",
+                "只推送 task branch",
+                "不包含 PR/MR",
+            ),
+        )
+        self.assertNotIn("GitHub", self.git_workflow)
+        self.assertNotIn("GitLab", self.git_workflow)
 
     def test_current_main_agent_must_dispatch_workers(self) -> None:
         self.assert_all(

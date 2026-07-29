@@ -13,6 +13,19 @@ $plan-dev-tasks
 
 不要直接向 `$dev-with-tdd` 提交自然语言开发需求；它只接受由 Coordinator 派发、版本完整且已批准的 Execution Packet。
 
+## 纯 Git workflow
+
+Git 仓库任务采用 provider-neutral 的纯 Git workflow。任务开始前，Coordinator 通过随 skill 发布并经过测试的 shell runner 检查仓库、同步远端默认分支，并只接受 fast-forward；同步后的默认分支 HEAD 成为所有新 task branch 的共同基线。
+
+系统与 Git 状态性操作遵循 shell-first：prompt 负责决策和结构化参数，runner 负责 branch、worktree、依赖软链接、commit、push 与清理。脚本能力缺失或校验失败时停止，不用临时拼接命令绕过。
+
+- 串行任务共用一条 task branch 和当前主工作区，不创建 worktree。
+- 只有实际同时执行、无依赖且无写入冲突的并行任务才创建项目根目录 `.tmp/<task-id>/worktrees/<packet-id>/` 下的独立 worktree。
+- 并行任务可按 packet 声明创建 `node_modules` 等受控依赖软链接；共享前必须校验 Git ignore、manifest/lockfile fingerprint，构建输出、数据库和运行时状态不得共享。
+- 每个验收通过的 packet 形成一个 commit。只有 human approval 明确授权远端发布时才只推送 task branch。
+
+核心流程不自动 merge 默认分支、不 force push、不删除远端分支，也不包含 PR/MR 或其他 provider adapter。
+
 ## 一键安装
 
 克隆仓库后运行根目录脚本。请将 `<owner>` 替换为实际仓库所有者：

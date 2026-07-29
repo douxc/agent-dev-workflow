@@ -32,6 +32,17 @@
 - 代码与地图均已持久化、review 和证据提取完成后才清理当前任务目录。
 - 失败、`context_gap`、blocked 或地图冲突时保留恢复现场。
 
+## Git Workflow
+
+- `Git Context` 的 project root、mode、Base SHA、task branch、worktree 与 runner 实际输出一致；expected default tip 和 task branch expected remote tip 未混用；worker 没有执行 Git 状态写操作。
+- worker 写入前的 `verify` 通过，返回 `head` 与 `Expected HEAD` 精确匹配；worker handoff 后先完成 Coordinator 独立 review，再以 `Allowed write paths` 调用 `commit`。
+- 一个 accepted packet 一个 commit；commit 后 worktree clean，正式 diff 不含任务脚本、日志或 task workspace 内容。
+- `project-map.md` 发生变化时，push 前已经形成只含该文件的 Coordinator metadata commit；没有地图变化时没有空 commit。
+- 完成前再次 `inspect`、检查默认分支与共享接口 drift 并运行 `verify`；drift 未被自动 merge、rebase、reset 或 stash 掩盖。
+- `push` 与审批中的 remote publish authorization 一致，只推送 task branch；expected remote tip 不匹配时已经停止。
+- 不自动 merge 默认分支，不 force push，不删除远端分支，不创建 PR/MR。
+- 并行模式仅在 accepted commit 持久化且 clean 后先移除 worktree，再清理 task workspace；串行模式不调用 worktree cleanup。失败或 drift 保留现场。
+
 ## 语言与结论
 
 - 用户输出、任务包、handoff 和 review 默认使用简体中文；英文只保留必要技术字面量。
