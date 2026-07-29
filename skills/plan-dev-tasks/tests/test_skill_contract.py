@@ -23,6 +23,12 @@ class PlanDevTasksContractTest(unittest.TestCase):
             if cls.runtime_path.exists()
             else ""
         )
+        cls.codex_runtime_path = ROOT / "references/runtime-codex.md"
+        cls.codex_runtime = (
+            cls.codex_runtime_path.read_text(encoding="utf-8")
+            if cls.codex_runtime_path.exists()
+            else ""
+        )
         cls.review = read("references/review-checklist.md")
         cls.git_workflow_path = ROOT / "references/git-workflow.md"
         cls.git_workflow = (
@@ -584,6 +590,86 @@ class PlanDevTasksContractTest(unittest.TestCase):
         ):
             with self.subTest(platform_tool=platform_tool):
                 self.assertNotIn(platform_tool, dispatch)
+
+    def test_codex_runtime_adapter_is_routed_and_capability_gated(self) -> None:
+        self.assertTrue(self.codex_runtime_path.is_file())
+        self.assertIn(
+            "[runtime-codex.md](runtime-codex.md)",
+            self.runtime,
+        )
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "Platform: codex",
+                "Adapter version: 1",
+                "actually registered",
+                "Capability evidence",
+                "`spawn_agent`",
+                "`send_message`",
+                "`followup_task`",
+                "`wait_agent`",
+                "fail closed",
+                "主上下文",
+                "冒充 worker",
+            ),
+        )
+
+    def test_codex_runtime_adapter_requires_two_phase_authorization(self) -> None:
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "Authorization mode: two-phase",
+                "只读",
+                "handshake",
+                "Plan version",
+                "Context version",
+                "Task version",
+                "Task ID",
+                "Worktree",
+                "Task branch",
+                "Expected HEAD",
+                "Base SHA",
+                "Authorization Evidence",
+                "同一 worker handle",
+            ),
+        )
+
+    def test_codex_runtime_adapter_auto_resumes_review_and_aggregates(self) -> None:
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "Completion mode: wait_agent/mailbox final handoff",
+                "handoff-received",
+                "reviewing",
+                "立即",
+                "普通用户消息",
+                "不得正常结束",
+                "最多 3",
+                "background-aggregate",
+                "全部 handoff",
+            ),
+        )
+
+    def test_codex_runtime_adapter_visibility_and_tool_exclusivity(self) -> None:
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "runtime agent tree",
+                "`agents/openai.yaml`",
+                "`.codex/agents`",
+                "不需要",
+            ),
+        )
+        for foreign_tool in (
+            "Agent(dev-with-tdd)",
+            "Skill(dev-with-tdd)",
+            "delegate_task",
+            "ExitPlanMode",
+            "AskUserQuestion",
+            "clarify",
+        ):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.codex_runtime)
 
     def test_handoff_context_gap_and_replan_handling(self) -> None:
         self.assert_all(

@@ -25,6 +25,14 @@ Runtime Context:
 
 平台信号冲突、未知平台、adapter 缺失、声明能力与实际注册能力不一致或结果回传不确定时 fail closed。只加载与已识别 `Platform` 精确匹配的一个 Runtime Adapter；不得跨 adapter fallback，也不得在共享主上下文中冒充缺失的 worker。
 
+## Adapter 路由
+
+平台识别和能力核验完成后，仅按 `Platform` 加载下列匹配项：
+
+- `codex`：[runtime-codex.md](runtime-codex.md)
+
+列表中没有匹配项时视为 adapter 缺失并 fail closed；不得选择相近平台或继续派发。
+
 ## Worker Record
 
 Coordinator 为每个已派发 packet 维护一个 **Coordinator-only Worker Record**：
