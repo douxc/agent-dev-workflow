@@ -50,6 +50,21 @@ Workspace Context:
   Baseline fingerprint:
   Relevant file fingerprints:
   Existing user changes:
+Runtime Context:
+  Platform: codex | claude-code | hermes
+  Adapter version:
+  Worker transport:
+  Dispatch mode: foreground | background-aggregate
+  Authorization mode: two-phase | atomic
+  Completion mode:
+  Capability evidence:
+Authorization Evidence:
+  Plan version:
+  Context version:
+  Task version:
+  Task ID:
+  Environment verification: pending | Git runner verify evidence | non-Git workspace boundary evidence
+  Write permission: pending | granted
 TDD classification: required | not required
 Red test plan:
 Green implementation plan:
@@ -80,9 +95,9 @@ Git Context:
 
 非 Git 项目不要求这些字段，也不得伪造 `Git Context`。Git 仓库字段缺失、`Git owner` 不是 Coordinator，或上下文不是 runner 实际结果时拒绝 packet。
 
-拒绝字段缺失、审批不是 `approved`、版本含糊、一个 packet 含多个 feature 或 `Required skill` 不匹配的任务包。不得接收完整项目地图，不得接收完整 transcript、原始全量日志或无关代码。
+拒绝字段缺失、审批不是 `approved`、版本含糊、一个 packet 含多个 feature、`Required skill` 不匹配，或 `Runtime Context` 声明的授权模式和证据不一致的任务包。不得接收完整项目地图，不得接收完整 transcript、原始全量日志或无关代码。
 
-修改前必须返回并等待 Coordinator 校验以下确认：
+两种授权模式都必须返回以下 handshake：
 
 ```text
 Loaded skill: dev-with-tdd
@@ -93,15 +108,15 @@ Task ID:
 Approval inherited: yes
 ```
 
-确认完成前不得修改任何文件。版本或 Task ID 不一致时停止，不猜测正确版本。
+`two-phase` 初始 `Authorization Evidence` 必须是 `pending`，并在返回 handshake 后等待 Coordinator 核对并通过同一 worker handle 续发授权；确认完成前不得修改任何文件。`atomic` 必须在派发前已经收到绑定 Plan version、Context version、Task version、Task ID、Coordinator Git verify 结果（非 Git 项目为 workspace 边界验证证据）、`Environment verification:` 和 `Write permission: granted` 的完整授权证据；核对成功后无需等待第二次 Coordinator 确认，可在同一次执行中继续。worker 不得自行补全、推断或伪造任一授权字段。版本、Task ID 或证据不一致时停止，不猜测正确值。
 
-Git 仓库的 handshake 经 Coordinator 确认后、写入前，还必须：
+Git 仓库写入前还必须：
 
 1. 核对当前工作目录与 packet 的 exact `Worktree` 一致，不得改变执行目录。
 2. 使用目的单一的只读检查核对 `git rev-parse --show-toplevel`、`git branch --show-current` 和 `git rev-parse HEAD`；结果必须分别匹配 `Worktree`、`Task branch` 和 `Expected HEAD`。
-3. 确认 Coordinator runner `verify` 已通过，并等待 Coordinator 明确允许写入。
+3. 确认 Coordinator runner `verify` 已通过并有明确允许写入：`two-phase` 从 handshake 后的 Coordinator 消息取得，`atomic` 从派发前已绑定当前 packet 的授权证据取得。
 
-实际 worktree、branch 或 HEAD 与 `Git Context` 不符，runner `verify` 未通过，或尚未获得明确写入许可时，返回 `Status: context_gap` 或 `blocked`，不得修改任何文件。
+非 Git 项目的 `atomic` packet 必须提供 Coordinator 已核对执行目录、允许路径和 workspace 边界的证据；缺失时不得以 Git 证据代替。实际 worktree、branch 或 HEAD 与 `Git Context` 不符，runner `verify` 未通过，或尚未获得明确写入许可时，返回 `Status: context_gap` 或 `blocked`，不得修改任何文件。
 
 ## 2. 受控发现与范围锁定
 

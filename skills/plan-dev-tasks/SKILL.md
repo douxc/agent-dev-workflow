@@ -11,7 +11,7 @@ description: 作为唯一面向用户和隐式触发的开发入口及 Coordinat
 
 - 面向用户及 agent 间的自然语言默认使用简体中文；英文仅用于代码、标识符、API 字段、路径、命令、配置值、精确错误和必要技术术语。
 - 代码、测试和仓库指令是事实来源；`project-map.md` 只用于快速定位。
-- 读取 [references/project-map.md](references/project-map.md)、[references/task-packet.md](references/task-packet.md)、[references/task-workspace.md](references/task-workspace.md) 与 [references/git-workflow.md](references/git-workflow.md)；请求审批前读取 [references/human-approval.md](references/human-approval.md)；最终验收时读取 [references/review-checklist.md](references/review-checklist.md)。
+- 读取 [references/project-map.md](references/project-map.md)、[references/task-packet.md](references/task-packet.md)、[references/task-workspace.md](references/task-workspace.md)、[references/git-workflow.md](references/git-workflow.md) 与 [references/runtime-adapters.md](references/runtime-adapters.md)；请求审批前读取 [references/human-approval.md](references/human-approval.md)；平台识别后只加载匹配的 Runtime Adapter；最终验收时读取 [references/review-checklist.md](references/review-checklist.md)。
 - 除 [references/git-workflow.md](references/git-workflow.md) 规定的任务开始前 `inspect`/`sync` 基线同步这一唯一受控例外外，计划批准前只做只读检查；branch、worktree、commit、push 等副作用在批准前仍禁止。需要保存计划或日志时，按 task workspace 契约创建项目内临时目录。
 - Git 仓库的状态性操作严格使用 `scripts/git-workflow.sh`；缺失或失败时 fail closed，不临时拼接等价命令。
 - 同一版本化任务包只申请一次 human approval；worker 继承审批，不得重复申请。
@@ -69,6 +69,7 @@ Verification:
 - 明确区分 `Allowed write paths` 与 `Allowed discovery paths`，同时列出禁止路径、副作用和停止条件。
 - `Project Context` 只包含经代码验证的相关地图子集、约束、局部覆盖、路径、测试与证据。
 - `Workspace Context` 固定基线、相关文件 fingerprint 和用户已有改动。
+- `Runtime Context` 记录当前平台、adapter 版本、worker transport、dispatch/authorization/completion 模式和能力证据。
 - Git 仓库 packet 的 `Git Context` 记录 `local-only | serial | parallel` mode、project root、remote/default branch、Base SHA、task branch、worktree、Expected HEAD、expected default tip、expected remote tip、共享依赖与 fingerprint、Git owner 和 publish authorization。
 - 不传完整 `project-map.md`、完整 agent transcript、原始测试日志或无关代码。
 
@@ -86,7 +87,7 @@ Coordinator 保存地图与工作区基线 fingerprint，用于最终检查并�
 
 ## 5. 自动调度
 
-批准后，当前主 agent 必须自动调度，不得交给未定义的外部调度器。每个 packet 只派发给一个 `$dev-with-tdd` worker，并显式包含：
+批准后，当前主 agent 必须自动调度，不得交给未定义的外部调度器。先依据 `Runtime Context` 只加载与平台精确匹配的一个 Runtime Adapter；平台信号冲突、adapter 缺失或声明能力不可用时 fail closed，不得跨平台 fallback 或在主上下文冒充 worker。每个 packet 只派发给一个 `$dev-with-tdd` worker，并显式包含：
 
 ```text
 Required skill: dev-with-tdd
@@ -97,7 +98,7 @@ Task version:
 Task ID:
 ```
 
-派发后必须先取得：
+`Authorization mode: two-phase` 时，派发后必须先取得：
 
 ```text
 Loaded skill: dev-with-tdd
@@ -108,7 +109,9 @@ Task ID:
 Approval inherited: yes
 ```
 
-Coordinator 确认版本一致后才允许 worker 修改；未确认时不得允许修改，也不得接受 handoff。
+Coordinator 确认版本一致后才允许 worker 修改；未确认时不得允许修改，也不得接受 handoff。`Authorization mode: atomic` 时，Coordinator 必须在派发前完成相同版本检查和执行环境验证，并把绑定 Task ID、三个版本、Git verify（或非 Git workspace 边界证据）的明确写入许可随 packet 一次性交付；worker 返回 handshake 后直接执行。
+
+Coordinator 为每个 packet 维护不得传给 worker 的 Coordinator-only `Worker Record`，记录 Task ID、平台 worker handle、生命周期状态和最终 handoff。共享 core 只维护 [references/runtime-adapters.md](references/runtime-adapters.md) 定义的状态机与证据，不直接实现平台 worker、审批或结果回传机制。
 
 - 准备 Git 执行环境时，依赖串行 packet 共用一条 task branch 和当前主 worktree，整个序列只调用一次 `prepare-serial`，不创建 worktree。
 - 只有实际同时运行、无依赖、无写入冲突且共享接口稳定的 packets 才调用 `prepare-parallel`；各自 branch 来自同一个 `Base SHA`，worktree 固定在项目 `.tmp/<task-id>/worktrees/<packet-id>/`。
@@ -139,7 +142,7 @@ Approval impact: none | replan_required
 
 ## 7. Coordinator 最终 review
 
-每个 worker handoff 后，Coordinator 独立 review 用户工作区实际 diff、真实代码和可复现测试证据，不得只复述 handoff。结果为 accepted 后才用 runner `commit` 且只传该 packet 的 `Allowed write paths`；一个 accepted packet 一个 commit。未通过时恢复相同 worker，不得提交。
+每个 worker handoff 后，Coordinator 必须将状态从 `handoff-received` 立即进入 `reviewing`，独立 review 用户工作区实际 diff、真实代码和可复现测试证据，不得等待普通用户消息唤醒，也不得只复述 handoff。Coordinator 在 `dispatched`、`running`、`handoff-received` 或 `reviewing` 状态不得正常结束。结果为 accepted 后才用 runner `commit` 且只传该 packet 的 `Allowed write paths`；一个 accepted packet 一个 commit。未通过时进入 `rework` 并恢复相同 worker，不得提交。
 
 所有依赖任务完成后，按 [references/review-checklist.md](references/review-checklist.md) 检查：
 

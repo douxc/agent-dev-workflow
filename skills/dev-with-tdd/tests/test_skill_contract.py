@@ -72,6 +72,56 @@ class DevWithTddContractTest(unittest.TestCase):
             ),
         )
 
+    def test_runtime_context_supports_two_phase_and_atomic_authorization(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "Runtime Context:",
+                "Platform: codex | claude-code | hermes",
+                "Adapter version:",
+                "Worker transport:",
+                "Dispatch mode: foreground | background-aggregate",
+                "Authorization mode: two-phase | atomic",
+                "Completion mode:",
+                "Capability evidence:",
+                "`two-phase`",
+                "`atomic`",
+            ),
+        )
+
+    def test_atomic_authorization_is_complete_and_cannot_be_fabricated(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "Authorization Evidence:",
+                "Plan version",
+                "Context version",
+                "Task version",
+                "Task ID",
+                "Environment verification:",
+                "Write permission: granted",
+                "Git verify",
+                "非 Git",
+                "明确写入许可",
+                "派发前",
+                "不得自行补全、推断或伪造",
+                "无需等待第二次 Coordinator 确认",
+            ),
+        )
+
+    def test_two_phase_still_requires_coordinator_confirmation(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "`two-phase`",
+                "返回 handshake",
+                "等待 Coordinator",
+                "runner `verify` 已通过",
+                "明确允许写入",
+                "确认完成前不得修改任何文件",
+            ),
+        )
+
     def test_packet_is_minimal_complete_context(self) -> None:
         self.assert_all(
             self.skill,

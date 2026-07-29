@@ -34,6 +34,21 @@ Workspace Context:
   Baseline fingerprint:
   Relevant file fingerprints:
   Existing user changes:
+Runtime Context:
+  Platform: codex | claude-code | hermes
+  Adapter version:
+  Worker transport:
+  Dispatch mode: foreground | background-aggregate
+  Authorization mode: two-phase | atomic
+  Completion mode:
+  Capability evidence:
+Authorization Evidence:
+  Plan version:
+  Context version:
+  Task version:
+  Task ID:
+  Environment verification: pending | Git runner verify evidence | non-Git workspace boundary evidence
+  Write permission: pending | granted
 Git Context:
   Mode: local-only | serial | parallel
   Project root:
@@ -64,6 +79,8 @@ Language check: passed
 - `Allowed discovery paths` 可包含目标文件、直接依赖、相关类型、测试、项目指令和局部注释的受控读取范围。
 - `Project Context` 只传与当前 feature 相关、且已由代码或测试验证的地图子集和证据；不得包含完整 `project-map.md`。
 - `Workspace Context` 必须让 worker 识别并保留用户已有改动，不得把用户修改误判为当前任务产物。
+- `Runtime Context` 必须来自唯一匹配当前平台的 Runtime Adapter，记录经过验证的 worker transport、授权和 completion 能力；平台信号冲突或能力不足时 fail closed。
+- `Authorization mode: atomic` 时，packet 的 `Authorization Evidence` 必须绑定 `Task ID` 与三个版本，`Environment verification` 包含 Coordinator 已完成的 Git runner verify 结果（非 Git 项目为 non-Git workspace boundary evidence），并且必须是 `Write permission: granted`；`two-phase` 初始派发使用 `pending`，只能在 handshake 通过后由同一 worker handle 收到完整授权证据。
 - `Git Context` 必须来自 `git-workflow.sh` 的实际输出和批准后的准备结果；worker 只验证并使用指定 worktree，不拥有 Git 状态写权限。
 - 不得包含完整 agent transcript、原始全量日志、其他 feature 的实现历史或无关代码。
 

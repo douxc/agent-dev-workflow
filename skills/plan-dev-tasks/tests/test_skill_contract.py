@@ -17,6 +17,12 @@ class PlanDevTasksContractTest(unittest.TestCase):
         cls.map_ref = read("references/project-map.md")
         cls.workspace = read("references/task-workspace.md")
         cls.packet = read("references/task-packet.md")
+        cls.runtime_path = ROOT / "references/runtime-adapters.md"
+        cls.runtime = (
+            cls.runtime_path.read_text(encoding="utf-8")
+            if cls.runtime_path.exists()
+            else ""
+        )
         cls.review = read("references/review-checklist.md")
         cls.git_workflow_path = ROOT / "references/git-workflow.md"
         cls.git_workflow = (
@@ -491,6 +497,93 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "不得接受 handoff",
             ),
         )
+
+    def test_runtime_context_and_worker_record_are_platform_neutral(self) -> None:
+        self.assertTrue(self.runtime_path.is_file())
+        self.assert_all(
+            self.packet + self.runtime,
+            (
+                "Runtime Context:",
+                "Platform: codex | claude-code | hermes",
+                "Adapter version:",
+                "Worker transport:",
+                "Dispatch mode: foreground | background-aggregate",
+                "Authorization mode: two-phase | atomic",
+                "Completion mode:",
+                "Capability evidence:",
+                "Worker Record",
+                "Task ID",
+                "worker handle",
+                "Coordinator-only",
+                "不得传给 worker",
+            ),
+        )
+
+    def test_atomic_authorization_evidence_has_one_shared_shape(self) -> None:
+        self.assert_all(
+            self.packet + self.runtime,
+            (
+                "Authorization Evidence:",
+                "Plan version:",
+                "Context version:",
+                "Task version:",
+                "Task ID:",
+                "Environment verification:",
+                "Write permission: granted",
+                "Git runner verify",
+                "non-Git workspace boundary",
+                "two-phase",
+                "pending",
+            ),
+        )
+
+    def test_runtime_lifecycle_forces_immediate_review(self) -> None:
+        combined = self.skill + self.runtime
+        self.assert_all(
+            combined,
+            (
+                "approved",
+                "prepared",
+                "dispatched",
+                "authorized",
+                "running",
+                "handoff-received",
+                "reviewing",
+                "accepted",
+                "rework",
+                "context-gap",
+                "blocked",
+                "committed",
+                "finalized",
+                "立即进入 `reviewing`",
+                "不得等待普通用户消息唤醒",
+                "不得正常结束",
+            ),
+        )
+
+    def test_shared_dispatch_selects_one_adapter_without_platform_tool_names(self) -> None:
+        dispatch = self.skill.split("## 5. 自动调度", 1)[1].split(
+            "## 6. 状态处理", 1
+        )[0]
+        self.assert_all(
+            self.skill + self.runtime,
+            (
+                "Runtime Adapter",
+                "只加载",
+                "平台信号冲突",
+                "fail closed",
+            ),
+        )
+        for platform_tool in (
+            "spawn_agent",
+            "Agent(dev-with-tdd)",
+            "delegate_task",
+            "request_user_input",
+            "ExitPlanMode",
+            "clarify",
+        ):
+            with self.subTest(platform_tool=platform_tool):
+                self.assertNotIn(platform_tool, dispatch)
 
     def test_handoff_context_gap_and_replan_handling(self) -> None:
         self.assert_all(
