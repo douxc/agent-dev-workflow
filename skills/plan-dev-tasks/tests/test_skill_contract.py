@@ -286,7 +286,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
         self.assert_all(
             self.git_workflow,
             (
-                "`scripts/git-workflow.sh`",
+                "`${SKILL_ROOT}/scripts/git-workflow.sh`",
                 "prompt 负责决策和结构化参数",
                 "状态性 Git 或系统操作",
                 "shell runner",
@@ -297,6 +297,63 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "文件内容编辑",
                 "`key<TAB>value`",
                 "不得 `eval` 或 `source`",
+            ),
+        )
+
+    def test_skill_resources_resolve_from_loaded_skill_root(self) -> None:
+        combined = self.skill + self.git_workflow
+        self.assert_all(
+            combined,
+            (
+                "`SKILL_ROOT`",
+                "包含已加载 `SKILL.md` 的目录",
+                "与当前工作目录和 `${PROJECT_ROOT}` 无关",
+                "`${SKILL_ROOT}/references/`",
+                "`${SKILL_ROOT}/scripts/git-workflow.sh`",
+                "验证这个精确的 bundled resource",
+            ),
+        )
+
+    def test_project_repository_must_not_own_or_supply_the_runner(self) -> None:
+        combined = self.skill + self.git_workflow
+        self.assert_all(
+            combined,
+            (
+                "`${PROJECT_ROOT}/scripts/git-workflow.sh`",
+                "不得探测",
+                "不得要求",
+                "不得复制",
+                "不得创建",
+                "业务仓库不拥有 runner",
+            ),
+        )
+
+    def test_unresolvable_skill_root_fails_closed_without_false_missing_claim(
+        self,
+    ) -> None:
+        combined = self.skill + self.git_workflow
+        self.assert_all(
+            combined,
+            (
+                "skill resource base",
+                "`context_gap`",
+                "不得宣称 bundled runner 缺失",
+                "不得回退到直接 Git 命令",
+            ),
+        )
+
+    def test_dirty_project_is_separate_from_runner_resolution(self) -> None:
+        claude_coordinator = (
+            self.claude_agent_root / "plan-dev-tasks.md"
+        ).read_text(encoding="utf-8")
+        self.assert_all(
+            self.git_workflow + claude_coordinator,
+            (
+                "dirty",
+                "独立",
+                "不执行 stash、reset 或 clean",
+                "从已加载 `plan-dev-tasks` 的 `SKILL.md` 所在目录解析",
+                "不得从业务项目根目录解析",
             ),
         )
 

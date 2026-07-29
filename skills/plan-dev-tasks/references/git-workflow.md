@@ -6,7 +6,13 @@
 
 prompt 负责决策和结构化参数；状态性 Git 或系统操作必须调用随 skill 发布、经过测试的 shell runner：
 
-`scripts/git-workflow.sh`
+`${SKILL_ROOT}/scripts/git-workflow.sh`
+
+`SKILL_ROOT` 是包含已加载 `SKILL.md` 的目录，与当前工作目录和 `${PROJECT_ROOT}` 无关。所有 `${SKILL_ROOT}/references/` 和 `${SKILL_ROOT}/scripts/` 资源都从这个已加载的 skill resource base 解析。执行 runner 或报告 runner 缺失前，必须通过宿主暴露的已加载 skill 位置解析 `SKILL_ROOT`，并验证 `${SKILL_ROOT}/scripts/git-workflow.sh` 这个精确的 bundled resource。
+
+宿主不暴露或不允许解析已加载 skill 的 resource base 时，返回 `context_gap` 或 `blocked`，并把 `skill resource base` 作为缺失上下文；不得宣称 bundled runner 缺失，也不得回退到直接 Git 命令。只有 `SKILL_ROOT` 已可靠解析且精确 bundled resource 确实缺失或不可执行时，才能报告 runner 缺失。
+
+不得探测 `${PROJECT_ROOT}/scripts/git-workflow.sh`，不得要求业务仓库提供该文件，不得复制 runner 到业务仓库，也不得在业务仓库创建 runner；业务仓库不拥有 runner。
 
 runner 支持 `inspect`、`sync`、`prepare-serial`、`prepare-parallel`、`verify`、`commit`、`push`、`cleanup-parallel`。branch、worktree、依赖软链接、commit、push 与 worktree cleanup 不得由 prompt 临时拼接命令完成，即不得临时拼接等价状态操作。所需状态性子命令缺失或失败时必须 fail closed，保留现场并报告 `blocked`、`context_gap` 或重新规划。
 
@@ -25,7 +31,7 @@ Git 仓库任务必须在生成 `Analysis Brief` 前调用 runner `inspect`。�
 - remote 优先来自当前 upstream，其次是唯一可解析 remote。
 - 默认分支优先使用 remote HEAD，再按现有 ref 回退 `main`、`master`；仍不唯一时停止，不猜测。
 - `sync` 执行 fetch，并只允许 fast-forward 更新本地默认分支。
-- dirty、local ahead、diverged、detached、进行中的 Git 操作或同步失败均为 `blocked`；不执行 reset、rebase 或 stash。
+- dirty、local ahead、diverged、detached、进行中的 Git 操作或同步失败均为 `blocked`。dirty 是 runner 解析成功后的独立项目状态阻塞，不表示 runner 缺失；不执行 stash、reset 或 clean，也不执行 rebase。
 - 成功后把 runner 输出的 `Base SHA` 作为本次所有新 task branch 的唯一基线，同时记录 remote default tip。
 
 只有经只读发现确认仓库没有 remote 时才进入 `local-only`。`inspect` 因无法解析 remote 而失败后，Coordinator 可以用目的单一的只读命令确认 remote 列表为空，再读取本地默认分支与 HEAD，并调用 `verify --require-clean` 校验 branch、Base SHA、clean 状态和进行中的 Git 操作；其他 `inspect` 失败仍然 fail closed。local-only 记录本地默认分支 HEAD 为 `Base SHA`，禁止 push。

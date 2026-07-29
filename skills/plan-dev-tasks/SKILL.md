@@ -11,9 +11,11 @@ description: 作为唯一面向用户和隐式触发的开发入口及 Coordinat
 
 - 面向用户及 agent 间的自然语言默认使用简体中文；英文仅用于代码、标识符、API 字段、路径、命令、配置值、精确错误和必要技术术语。
 - 代码、测试和仓库指令是事实来源；`project-map.md` 只用于快速定位。
+- `SKILL_ROOT` 是包含当前已加载 `SKILL.md` 的目录，与当前工作目录和 `${PROJECT_ROOT}` 无关。本 skill 中所有 `references/` 与 `scripts/` 资源都相对 `SKILL_ROOT` 解析；链接形式的 `references/...` 等价于 `${SKILL_ROOT}/references/...`，runner 的唯一执行路径是 `${SKILL_ROOT}/scripts/git-workflow.sh`。
 - 读取 [references/project-map.md](references/project-map.md)、[references/task-packet.md](references/task-packet.md)、[references/task-workspace.md](references/task-workspace.md)、[references/git-workflow.md](references/git-workflow.md) 与 [references/runtime-adapters.md](references/runtime-adapters.md)；请求审批前读取 [references/human-approval.md](references/human-approval.md)；平台识别后只加载匹配的 Runtime Adapter；最终验收时读取 [references/review-checklist.md](references/review-checklist.md)。
 - 除 [references/git-workflow.md](references/git-workflow.md) 规定的任务开始前 `inspect`/`sync` 基线同步这一唯一受控例外外，计划批准前只做只读检查；branch、worktree、commit、push 等副作用在批准前仍禁止。需要保存计划或日志时，按 task workspace 契约创建项目内临时目录。
-- Git 仓库的状态性操作严格使用 `scripts/git-workflow.sh`；缺失或失败时 fail closed，不临时拼接等价命令。
+- Git 仓库的状态性操作严格使用 `${SKILL_ROOT}/scripts/git-workflow.sh`；必须先验证这个精确的 bundled resource。若宿主不暴露或不允许解析已加载 skill 的 resource base，返回 `context_gap` 或 `blocked` 并明确缺失 `skill resource base`；此时不得宣称 bundled runner 缺失，也不得回退到直接 Git 命令。
+- 不得探测 `${PROJECT_ROOT}/scripts/git-workflow.sh`，不得要求业务仓库提供它，不得复制 runner 到业务仓库，也不得在业务仓库创建 runner；业务仓库不拥有 runner。
 - 同一版本化任务包只申请一次 human approval；worker 继承审批，不得重复申请。
 
 ## 1. 分析与 Project Map 定位
