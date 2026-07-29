@@ -17,6 +17,41 @@ class PlanDevTasksContractTest(unittest.TestCase):
         cls.map_ref = read("references/project-map.md")
         cls.workspace = read("references/task-workspace.md")
         cls.packet = read("references/task-packet.md")
+        cls.runtime_path = ROOT / "references/runtime-adapters.md"
+        cls.runtime = (
+            cls.runtime_path.read_text(encoding="utf-8")
+            if cls.runtime_path.exists()
+            else ""
+        )
+        cls.codex_runtime_path = ROOT / "references/runtime-codex.md"
+        cls.codex_runtime = (
+            cls.codex_runtime_path.read_text(encoding="utf-8")
+            if cls.codex_runtime_path.exists()
+            else ""
+        )
+        cls.claude_runtime_path = ROOT / "references/runtime-claude-code.md"
+        cls.claude_runtime = (
+            cls.claude_runtime_path.read_text(encoding="utf-8")
+            if cls.claude_runtime_path.exists()
+            else ""
+        )
+        cls.hermes_runtime_path = ROOT / "references/runtime-hermes.md"
+        cls.hermes_runtime = (
+            cls.hermes_runtime_path.read_text(encoding="utf-8")
+            if cls.hermes_runtime_path.exists()
+            else ""
+        )
+        cls.hermes_transcript_path = (
+            ROOT / "tests" / "fixtures" / "hermes-delegation-transcript.txt"
+        )
+        cls.hermes_transcript = (
+            cls.hermes_transcript_path.read_text(encoding="utf-8")
+            if cls.hermes_transcript_path.exists()
+            else ""
+        )
+        cls.claude_agent_root = (
+            ROOT.parents[1] / "adapters" / "claude-code" / "agents"
+        )
         cls.review = read("references/review-checklist.md")
         cls.git_workflow_path = ROOT / "references/git-workflow.md"
         cls.git_workflow = (
@@ -489,6 +524,403 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "确认版本一致",
                 "未确认时不得允许修改",
                 "不得接受 handoff",
+            ),
+        )
+
+    def test_runtime_context_and_worker_record_are_platform_neutral(self) -> None:
+        self.assertTrue(self.runtime_path.is_file())
+        self.assert_all(
+            self.packet + self.runtime,
+            (
+                "Runtime Context:",
+                "Platform: codex | claude-code | hermes",
+                "Adapter version:",
+                "Worker transport:",
+                "Dispatch mode: foreground | background-aggregate",
+                "Authorization mode: two-phase | atomic",
+                "Completion mode:",
+                "Capability evidence:",
+                "Worker Record",
+                "Task ID",
+                "worker handle",
+                "Coordinator-only",
+                "不得传给 worker",
+            ),
+        )
+
+    def test_atomic_authorization_evidence_has_one_shared_shape(self) -> None:
+        self.assert_all(
+            self.packet + self.runtime,
+            (
+                "Authorization Evidence:",
+                "Plan version:",
+                "Context version:",
+                "Task version:",
+                "Task ID:",
+                "Environment verification:",
+                "Write permission: granted",
+                "Git runner verify",
+                "non-Git workspace boundary",
+                "two-phase",
+                "pending",
+            ),
+        )
+
+    def test_runtime_lifecycle_forces_immediate_review(self) -> None:
+        combined = self.skill + self.runtime
+        self.assert_all(
+            combined,
+            (
+                "approved",
+                "prepared",
+                "dispatched",
+                "authorized",
+                "running",
+                "handoff-received",
+                "reviewing",
+                "accepted",
+                "rework",
+                "context-gap",
+                "blocked",
+                "committed",
+                "finalized",
+                "立即进入 `reviewing`",
+                "不得等待普通用户消息唤醒",
+                "不得正常结束",
+            ),
+        )
+
+    def test_shared_dispatch_selects_one_adapter_without_platform_tool_names(self) -> None:
+        dispatch = self.skill.split("## 5. 自动调度", 1)[1].split(
+            "## 6. 状态处理", 1
+        )[0]
+        self.assert_all(
+            self.skill + self.runtime,
+            (
+                "Runtime Adapter",
+                "只加载",
+                "平台信号冲突",
+                "fail closed",
+            ),
+        )
+        for platform_tool in (
+            "spawn_agent",
+            "Agent(dev-with-tdd)",
+            "delegate_task",
+            "request_user_input",
+            "ExitPlanMode",
+            "clarify",
+        ):
+            with self.subTest(platform_tool=platform_tool):
+                self.assertNotIn(platform_tool, dispatch)
+
+    def test_codex_runtime_adapter_is_routed_and_capability_gated(self) -> None:
+        self.assertTrue(self.codex_runtime_path.is_file())
+        self.assertIn(
+            "[runtime-codex.md](runtime-codex.md)",
+            self.runtime,
+        )
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "Platform: codex",
+                "Adapter version: 1",
+                "actually registered",
+                "Capability evidence",
+                "`spawn_agent`",
+                "`send_message`",
+                "`followup_task`",
+                "`wait_agent`",
+                "fail closed",
+                "主上下文",
+                "冒充 worker",
+            ),
+        )
+
+    def test_codex_runtime_adapter_requires_two_phase_authorization(self) -> None:
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "Authorization mode: two-phase",
+                "只读",
+                "handshake",
+                "Plan version",
+                "Context version",
+                "Task version",
+                "Task ID",
+                "Worktree",
+                "Task branch",
+                "Expected HEAD",
+                "Base SHA",
+                "Authorization Evidence",
+                "同一 worker handle",
+            ),
+        )
+
+    def test_codex_runtime_adapter_auto_resumes_review_and_aggregates(self) -> None:
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "Completion mode: wait_agent/mailbox final handoff",
+                "handoff-received",
+                "reviewing",
+                "立即",
+                "普通用户消息",
+                "不得正常结束",
+                "最多 3",
+                "background-aggregate",
+                "全部 handoff",
+            ),
+        )
+
+    def test_codex_runtime_adapter_visibility_and_tool_exclusivity(self) -> None:
+        self.assert_all(
+            self.codex_runtime,
+            (
+                "runtime agent tree",
+                "`agents/openai.yaml`",
+                "`.codex/agents`",
+                "不需要",
+            ),
+        )
+        for foreign_tool in (
+            "Agent(dev-with-tdd)",
+            "Skill(dev-with-tdd)",
+            "delegate_task",
+            "ExitPlanMode",
+            "AskUserQuestion",
+            "clarify",
+        ):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.codex_runtime)
+
+    def test_claude_runtime_adapter_is_routed_and_atomic(self) -> None:
+        self.assertTrue(self.claude_runtime_path.is_file())
+        self.assertIn(
+            "[runtime-claude-code.md](runtime-claude-code.md)",
+            self.runtime,
+        )
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "Platform: claude-code",
+                "Adapter version: 1",
+                "Worker transport: Agent(dev-with-tdd)",
+                "Authorization mode: atomic",
+                "`ExitPlanMode`",
+                "`AskUserQuestion`",
+                "Plan version",
+                "Context version",
+                "Task version",
+                "Task ID",
+                "Environment verification",
+                "Write permission: granted",
+                "派发前",
+                "handshake",
+                "不等待第二次",
+            ),
+        )
+        self.assertNotIn("Skill(dev-with-tdd)", self.claude_runtime)
+
+    def test_claude_serial_completion_immediately_enters_review(self) -> None:
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "Dispatch mode: foreground",
+                "Completion mode: foreground Agent result",
+                "串行",
+                "returned result",
+                "handoff-received",
+                "reviewing",
+                "立即",
+                "普通用户消息",
+            ),
+        )
+
+    def test_claude_parallel_requires_preapproval_aggregation_evidence(self) -> None:
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "L3",
+                "background-aggregate",
+                "最多 3",
+                "计划审批前",
+                "结果聚合",
+                "全部 handoff",
+                "串行",
+                "批准后",
+                "Git mode",
+            ),
+        )
+
+    def test_claude_adapter_excludes_other_runtime_transports(self) -> None:
+        for foreign_tool in (
+            "spawn_agent",
+            "send_message",
+            "followup_task",
+            "wait_agent",
+            "delegate_task",
+            "clarify",
+        ):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.claude_runtime)
+
+    def test_hermes_runtime_adapter_is_routed_and_atomic(self) -> None:
+        self.assertTrue(self.hermes_runtime_path.is_file())
+        self.assertIn(
+            "[runtime-hermes.md](runtime-hermes.md)",
+            self.runtime,
+        )
+        self.assert_all(
+            self.hermes_runtime,
+            (
+                "Platform: hermes",
+                "Adapter version: 1",
+                "Worker transport: delegate_task",
+                "Authorization mode: atomic",
+                "Coordinator 使用 `clarify`",
+                "child 不得调用 `clarify`",
+                "Plan version",
+                "Context version",
+                "Task version",
+                "Task ID",
+                "Environment verification",
+                "Write permission: granted",
+                "派发前",
+                "handshake",
+                "不等待第二次",
+            ),
+        )
+
+    def test_hermes_completion_resumes_review_or_blocks_safely(self) -> None:
+        self.assert_all(
+            self.hermes_runtime,
+            (
+                "result reinjection",
+                "synchronous delegate result",
+                "child identity",
+                "handoff-received",
+                "reviewing",
+                "立即",
+                "普通用户消息",
+                "session interruption",
+                "process restart",
+                "blocked",
+                "保留现场",
+            ),
+        )
+
+    def test_hermes_delegate_capabilities_concurrency_and_visibility(self) -> None:
+        self.assert_all(
+            self.hermes_runtime,
+            (
+                "actually registered `delegate_task`",
+                "fail closed",
+                "主上下文",
+                "冒充 child",
+                "最多 3",
+                "全部结果",
+                "`/skills`",
+                "temporary runtime instances",
+                "`.hermes/agents`",
+                "不得",
+            ),
+        )
+
+    def test_hermes_adapter_excludes_other_runtime_transports(self) -> None:
+        for foreign_tool in (
+            "spawn_agent",
+            "send_message",
+            "followup_task",
+            "wait_agent",
+            "Agent(dev-with-tdd)",
+            "Skill(dev-with-tdd)",
+            "request_user_input",
+            "ExitPlanMode",
+            "AskUserQuestion",
+        ):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.hermes_runtime)
+
+    def test_hermes_simulated_transcript_reaches_review_without_user_wakeup(
+        self,
+    ) -> None:
+        self.assertTrue(self.hermes_transcript_path.is_file())
+        ordered_events = (
+            "lifecycle=approved",
+            "approval=clarify-approved",
+            "authorization=atomic-complete",
+            "lifecycle=prepared",
+            "transport=delegate_task",
+            "lifecycle=dispatched",
+            "lifecycle=authorized",
+            "lifecycle=running",
+            "completion=result-reinjected",
+            "lifecycle=handoff-received",
+            "lifecycle=reviewing",
+        )
+        cursor = -1
+        for event in ordered_events:
+            with self.subTest(event=event):
+                position = self.hermes_transcript.find(event, cursor + 1)
+                self.assertGreater(position, cursor)
+                cursor = position
+        self.assert_all(
+            self.hermes_transcript,
+            (
+                "child=hermes-child-1",
+                "task-id=runtime-hermes-adapter",
+                "plan-version=1",
+                "context-version=1",
+                "task-version=1",
+                "handoff-authenticated=true",
+            ),
+        )
+        self.assertNotIn("user-message=continue", self.hermes_transcript)
+
+    def test_claude_custom_agents_load_their_corresponding_skills(self) -> None:
+        expected = {
+            "plan-dev-tasks": (
+                "唯一面向用户",
+                "Coordinator",
+                "Agent(dev-with-tdd)",
+            ),
+            "dev-with-tdd": (
+                "内部实现 worker",
+                "Execution Packet",
+                "不得",
+            ),
+        }
+        for name, body_markers in expected.items():
+            with self.subTest(agent=name):
+                path = self.claude_agent_root / f"{name}.md"
+                self.assertTrue(path.is_file())
+                definition = path.read_text(encoding="utf-8")
+                self.assertTrue(definition.startswith("---\n"))
+                self.assertRegex(definition, rf"(?m)^name: {re.escape(name)}$")
+                self.assertRegex(definition, r"(?m)^model: inherit$")
+                self.assertRegex(
+                    definition,
+                    rf"(?ms)^skills:\n  - {re.escape(name)}$",
+                )
+                self.assert_all(definition, body_markers)
+                self.assertNotIn("permissionMode:", definition)
+
+    def test_claude_installation_boundary_is_explicit(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "`~/.agents/platforms/claude-code/agents/`",
+                "`.claude`、`.claudeD`、`.claudeP`",
+                "`agents/`",
+                "`.codex` 和 `.hermes`",
+                "不得创建 `agents/`",
+                "默认 agent",
+                "权限",
+                "全局配置",
+                "新会话",
+                "重启",
+                "`/agents`",
             ),
         )
 
