@@ -100,6 +100,91 @@ class DevWithTddContractTest(unittest.TestCase):
         )
         self.assert_all(self.skill, ("不得接收完整项目地图", "不得接收完整 transcript"))
 
+    def test_git_packet_context_is_complete_only_for_git_repositories(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "Git Context:",
+                "Mode: local-only | serial | parallel",
+                "Project root:",
+                "Remote: none | remote name",
+                "Default branch:",
+                "Base SHA:",
+                "Task branch:",
+                "Worktree:",
+                "Expected HEAD:",
+                "Expected default tip:",
+                "Expected remote tip:",
+                "Shared dependency paths:",
+                "Shared dependency fingerprints:",
+                "Git owner: Coordinator",
+                "Remote publish authorization: approved | denied",
+                "非 Git 项目",
+                "不得伪造 `Git Context`",
+            ),
+        )
+
+    def test_git_context_is_read_only_verified_before_writes(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "exact `Worktree`",
+                "`git rev-parse --show-toplevel`",
+                "`git branch --show-current`",
+                "`git rev-parse HEAD`",
+                "Coordinator runner `verify`",
+                "明确允许写入",
+                "写入前",
+                "Status: context_gap",
+                "实际 worktree、branch 或 HEAD",
+                "不得修改任何文件",
+            ),
+        )
+
+    def test_git_state_writes_belong_only_to_coordinator_runner(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "Git 状态写权限只属于 Coordinator shell runner",
+                "`status`、`diff`、`log`、`rev-parse`",
+                "branch、switch、checkout",
+                "worktree add/remove",
+                "add、stage、commit",
+                "push、pull、fetch",
+                "merge、rebase、reset、restore",
+                "stash、clean、tag",
+                "remote、config",
+                "cleanup",
+                "不得执行或建议执行",
+            ),
+        )
+
+    def test_shared_dependencies_are_prepared_read_only_environment(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "`Allowed write paths`",
+                "共享依赖软链接",
+                "不得创建、替换或删除",
+                "`Shared dependency paths`",
+                "manifest",
+                "lockfile",
+                "Status: needs_replan",
+            ),
+        )
+
+    def test_worker_does_not_change_git_mode_or_execution_directory(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "serial",
+                "parallel",
+                "不得自行创建子任务",
+                "不得改变执行目录",
+                "一次 packet 一个 feature",
+            ),
+        )
+
     def test_reads_are_bounded_and_writes_are_locked(self) -> None:
         self.assert_all(
             self.skill,
@@ -156,10 +241,16 @@ class DevWithTddContractTest(unittest.TestCase):
                 "Context deviations:",
                 "Resource location changes:",
                 "Constraint changes observed:",
+                "Git observations:",
+                "Worktree:",
+                "Branch:",
+                "HEAD:",
+                "Git state writes: none",
                 "Remaining risks:",
                 "Status: completed | blocked | context_gap | needs_replan",
                 "Language check: passed",
                 "只报告观察结果",
+                "不得声称已 commit 或 push",
             ),
         )
 

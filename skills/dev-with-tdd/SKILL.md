@@ -58,6 +58,28 @@ Expanded verification:
 Language check: passed
 ```
 
+Git 仓库中的 packet 还必须包含完整的、由 Coordinator runner 产生的上下文：
+
+```text
+Git Context:
+  Mode: local-only | serial | parallel
+  Project root:
+  Remote: none | remote name
+  Default branch:
+  Base SHA:
+  Task branch:
+  Worktree:
+  Expected HEAD:
+  Expected default tip: SHA | not-applicable
+  Expected remote tip: absent | SHA | not-applicable
+  Shared dependency paths: none | project-relative paths
+  Shared dependency fingerprints: none | manifest/lockfile fingerprints
+  Git owner: Coordinator
+  Remote publish authorization: approved | denied
+```
+
+非 Git 项目不要求这些字段，也不得伪造 `Git Context`。Git 仓库字段缺失、`Git owner` 不是 Coordinator，或上下文不是 runner 实际结果时拒绝 packet。
+
 拒绝字段缺失、审批不是 `approved`、版本含糊、一个 packet 含多个 feature 或 `Required skill` 不匹配的任务包。不得接收完整项目地图，不得接收完整 transcript、原始全量日志或无关代码。
 
 修改前必须返回并等待 Coordinator 校验以下确认：
@@ -73,6 +95,14 @@ Approval inherited: yes
 
 确认完成前不得修改任何文件。版本或 Task ID 不一致时停止，不猜测正确版本。
 
+Git 仓库的 handshake 经 Coordinator 确认后、写入前，还必须：
+
+1. 核对当前工作目录与 packet 的 exact `Worktree` 一致，不得改变执行目录。
+2. 使用目的单一的只读检查核对 `git rev-parse --show-toplevel`、`git branch --show-current` 和 `git rev-parse HEAD`；结果必须分别匹配 `Worktree`、`Task branch` 和 `Expected HEAD`。
+3. 确认 Coordinator runner `verify` 已通过，并等待 Coordinator 明确允许写入。
+
+实际 worktree、branch 或 HEAD 与 `Git Context` 不符，runner `verify` 未通过，或尚未获得明确写入许可时，返回 `Status: context_gap` 或 `blocked`，不得修改任何文件。
+
 ## 2. 受控发现与范围锁定
 
 - 可读取 `Allowed discovery paths` 指定的路径、目标文件直接依赖、相关测试和适用项目指令，以验证真实行为。
@@ -80,6 +110,9 @@ Approval inherited: yes
 - 只能修改 `Allowed write paths`，并避开 `Forbidden paths` 与 `Forbidden side effects`。
 - 保留 `Existing user changes`，不得覆盖、重置或顺手整理无关改动。
 - 发现摘要与代码不一致时记录 `Context deviations`；不得把摘要当作代码快照。
+- `serial` 或 `parallel` 是 Coordinator 已决定的 Git mode；worker 不得自行创建子任务、切换 mode 或改变执行目录，一次 packet 一个 feature。
+- Git 状态写权限只属于 Coordinator shell runner。worker 只能用目的单一的 `status`、`diff`、`log`、`rev-parse` 等命令读取观察；不得执行或建议执行 branch、switch、checkout、worktree add/remove、add、stage、commit、push、pull、fetch、merge、rebase、reset、restore、stash、clean、tag、remote、config 或 cleanup。
+- 共享依赖软链接是 Coordinator 已准备的只读运行环境。worker 不得创建、替换或删除软链接，不得修改 `Shared dependency paths`、共享依赖内容或其 manifest、lockfile；若实现需要改变依赖定义，返回 `Status: needs_replan`。
 
 信息不足但只需补充只读上下文时，停止并返回：
 
@@ -139,13 +172,18 @@ Expanded verification:
 Context deviations:
 Resource location changes:
 Constraint changes observed:
+Git observations:
+  Worktree:
+  Branch:
+  HEAD:
+  Git state writes: none
 Assumptions:
 Remaining risks:
 Status: completed | blocked | context_gap | needs_replan
 Language check: passed
 ```
 
-`Resource location changes` 和 `Constraint changes observed` 只报告观察结果，不执行外部状态决策。原始日志仅写入 packet 指定的 `Task workspace`；handoff 只保留关键错误、结论和必要恢复信息。
+`Resource location changes`、`Constraint changes observed` 和 `Git observations` 只报告观察结果，不执行外部状态决策。Git 仓库 handoff 必须报告实际 Worktree、Branch、HEAD 和 `Git state writes: none`，不得声称已 commit 或 push。非 Git 项目的 `Git observations` 填写 `not-applicable`。原始日志仅写入 packet 指定的 `Task workspace`；handoff 只保留关键错误、结论和必要恢复信息。
 
 ## 安装与同步边界
 
