@@ -24,15 +24,16 @@ runner 输出是稳定的 `key<TAB>value` 数据。Coordinator 只按字段解�
 
 Git 仓库任务必须在生成 `Analysis Brief` 前调用 runner `inspect`。先验证 canonical project root、当前 branch、HEAD、clean 状态、进行中的 Git 操作、worktree 与 remote/default branch 发现结果。
 
-紧随 `inspect` 的 `sync` 是 feature approval 前唯一允许的状态性 Git 例外；它只允许在 clean default branch 执行 fetch + ff-only 基线同步。branch、worktree、commit、push 及其他 Git 副作用在批准前仍禁止，不得借同步阶段提前执行。
+紧随 `inspect` 的 `sync` 是 feature approval 前唯一允许的状态性 Git 例外；它只允许在 clean default branch 执行 fetch，并在远端线性领先时执行 ff-only 基线同步。branch、worktree、commit、push 及其他 Git 副作用在批准前仍禁止，不得借同步阶段提前执行。
 
 有 remote 时紧接着调用 `sync`：
 
 - remote 优先来自当前 upstream，其次是唯一可解析 remote。
 - 默认分支优先使用 remote HEAD，再按现有 ref 回退 `main`、`master`；仍不唯一时停止，不猜测。
-- `sync` 执行 fetch，并只允许 fast-forward 更新本地默认分支。
-- dirty、local ahead、diverged、detached、进行中的 Git 操作或同步失败均为 `blocked`。dirty 是 runner 解析成功后的独立项目状态阻塞，不表示 runner 缺失；不执行 stash、reset 或 clean，也不执行 rebase。
-- 成功后把 runner 输出的 `Base SHA` 作为本次所有新 task branch 的唯一基线，同时记录 remote default tip。
+- `sync` 执行 fetch，并通过 Git ancestry 选择最新安全默认分支，不按提交时间判断“最新”。
+- local 与 remote 相同时使用本地 HEAD；local 是 remote 祖先时只允许 fast-forward 更新本地默认分支；remote 是 local 祖先，即 `local ahead` 时保留本地默认分支并成功。
+- 两者互不为祖先才是真正分叉（`diverged`），此时 fail closed；dirty、detached、进行中的 Git 操作或同步失败也均为 `blocked`。dirty 是 runner 解析成功后的独立项目状态阻塞，不表示 runner 缺失；不执行 stash、reset 或 clean，也不执行 merge、rebase。
+- 成功后把 runner 输出的本地默认分支 `Base SHA` 作为本次所有新 task branch 的唯一基线，同时独立记录 remote default tip；`local ahead` 时两者可以不同。
 
 只有经只读发现确认仓库没有 remote 时才进入 `local-only`。`inspect` 因无法解析 remote 而失败后，Coordinator 可以用目的单一的只读命令确认 remote 列表为空，再读取本地默认分支与 HEAD，并调用 `verify --require-clean` 校验 branch、Base SHA、clean 状态和进行中的 Git 操作；其他 `inspect` 失败仍然 fail closed。local-only 记录本地默认分支 HEAD 为 `Base SHA`，禁止 push。
 

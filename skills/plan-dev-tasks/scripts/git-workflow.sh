@@ -334,7 +334,8 @@ sync_command() {
             "refs/remotes/$REMOTE/$DEFAULT_BRANCH"
     elif git -C "$PROJECT_ROOT" merge-base --is-ancestor \
         "$remote_sha" "$local_sha"; then
-        die "local default branch is ahead of remote"
+        # The local default branch is already the latest safe linear tip.
+        :
     else
         die "local default branch has diverged from remote"
     fi

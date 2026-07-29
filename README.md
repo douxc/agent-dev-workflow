@@ -58,7 +58,7 @@ Coordinator 收到 worker handoff 后必须立即进入 `reviewing` 并独立检
 
 ## 纯 Git workflow
 
-Git 仓库任务采用 provider-neutral 的纯 Git workflow。任务开始前，Coordinator 通过随 skill 发布并经过测试的 shell runner 检查仓库、同步远端默认分支，并只接受 fast-forward；同步后的默认分支 HEAD 成为所有新 task branch 的共同基线。
+Git 仓库任务采用 provider-neutral 的纯 Git workflow。任务开始前，Coordinator 通过随 skill 发布并经过测试的 shell runner 检查仓库并 fetch 默认分支，再按 Git ancestry 而非提交时间选择最新安全 main：远端线性领先时只接受 fast-forward，本地线性领先时保留本地 HEAD，真正分叉时停止。runner 输出的本地默认分支 `Base SHA` 成为所有新 task branch 的共同基线。
 
 系统与 Git 状态性操作遵循 shell-first：prompt 负责决策和结构化参数，runner 负责 branch、worktree、依赖软链接、commit、push 与清理。脚本能力缺失或校验失败时停止，不用临时拼接命令绕过。
 

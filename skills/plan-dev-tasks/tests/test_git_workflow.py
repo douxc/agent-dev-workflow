@@ -137,7 +137,74 @@ class GitWorkflowTest(unittest.TestCase):
             str(self.remote),
         )
 
-    def test_sync_rejects_dirty_ahead_and_diverged_default_branch(self) -> None:
+    def test_sync_keeps_equal_default_branch_as_base(self) -> None:
+        result = self.run_script("sync", "--project-root", str(self.project))
+        self.assert_success(result)
+        self.assertIn(f"base_sha\t{self.base}\n", result.stdout)
+        self.assertEqual(git(self.project, "rev-parse", "HEAD").stdout.strip(), self.base)
+
+    def test_sync_uses_ancestry_not_commit_time_when_local_is_ahead(self) -> None:
+        (self.project / "local.txt").write_text("local\n", encoding="utf-8")
+        git(self.project, "add", "local.txt")
+        commit_env = os.environ.copy()
+        commit_env.update(
+            {
+                "GIT_AUTHOR_DATE": "2000-01-01T00:00:00+0000",
+                "GIT_COMMITTER_DATE": "2000-01-01T00:00:00+0000",
+            }
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "local ahead with older timestamp"],
+            cwd=self.project,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=commit_env,
+        )
+        expected = git(self.project, "rev-parse", "HEAD").stdout.strip()
+
+        result = self.run_script("sync", "--project-root", str(self.project))
+
+        self.assert_success(result)
+        self.assertIn(f"base_sha\t{expected}\n", result.stdout)
+        self.assertEqual(git(self.project, "rev-parse", "HEAD").stdout.strip(), expected)
+
+        prepared = self.run_script(
+            "prepare-serial",
+            "--project-root",
+            str(self.project),
+            "--base",
+            expected,
+            "--branch",
+            "task/from-local-ahead",
+        )
+        self.assert_success(prepared)
+        self.assertEqual(
+            git(self.project, "rev-parse", "HEAD").stdout.strip(), expected
+        )
+
+        task_dir = self.make_owner()
+        parallel = self.run_script(
+            "prepare-parallel",
+            "--project-root",
+            str(self.project),
+            "--task-id",
+            "task-one",
+            "--packet-id",
+            "from-local-ahead",
+            "--base",
+            expected,
+            "--branch",
+            "task/parallel-from-local-ahead",
+        )
+        self.assert_success(parallel)
+        self.assertEqual(
+            git(task_dir / "worktrees" / "from-local-ahead", "rev-parse", "HEAD")
+            .stdout.strip(),
+            expected,
+        )
+
+    def test_sync_rejects_dirty_and_diverged_default_branch(self) -> None:
         (self.project / "tracked.txt").write_text("dirty\n", encoding="utf-8")
         dirty = self.run_script("sync", "--project-root", str(self.project))
         self.assertNotEqual(dirty.returncode, 0)
@@ -147,14 +214,17 @@ class GitWorkflowTest(unittest.TestCase):
         (self.project / "local.txt").write_text("local\n", encoding="utf-8")
         git(self.project, "add", "local.txt")
         git(self.project, "commit", "-m", "local ahead")
-        ahead = self.run_script("sync", "--project-root", str(self.project))
-        self.assertNotEqual(ahead.returncode, 0)
-        self.assertIn("ahead", ahead.stderr)
+        local_tip = git(self.project, "rev-parse", "HEAD").stdout.strip()
 
         self.peer_commit()
         diverged = self.run_script("sync", "--project-root", str(self.project))
         self.assertNotEqual(diverged.returncode, 0)
         self.assertIn("diverged", diverged.stderr)
+        self.assertEqual(
+            git(self.project, "rev-parse", "refs/heads/main").stdout.strip(),
+            local_tip,
+        )
+        self.assertEqual(git(self.project, "rev-parse", "HEAD").stdout.strip(), local_tip)
 
     def test_sync_rejects_detached_head_and_in_progress_operation(self) -> None:
         git(self.project, "switch", "--detach")

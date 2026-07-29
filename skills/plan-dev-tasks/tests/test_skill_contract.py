@@ -377,6 +377,10 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "detached",
                 "进行中的 Git 操作",
                 "不执行 reset、rebase 或 stash",
+                "Git ancestry",
+                "不按提交时间",
+                "`local ahead` 时保留本地默认分支",
+                "真正分叉",
             ),
         )
         self.assertRegex(

@@ -22,7 +22,7 @@ description: 作为唯一面向用户和隐式触发的开发入口及 Coordinat
 
 确定 `PROJECT_ROOT`：Git 项目使用 `git rev-parse --show-toplevel`，非 Git 项目使用用户明确的 workspace root。
 
-Git 仓库必须在输出 `Analysis Brief` 之前按 Git workflow 调用 runner `inspect`。有 remote 时随后调用 `sync`，以 remote HEAD、`main`、`master` 的安全顺序解析默认分支，fetch 并仅 fast-forward，同步输出的 `Base SHA` 是所有新 task branch 的共同基线。dirty、ahead、diverged、detached、进行中的 Git 操作或同步失败时 blocked，不执行 reset、rebase 或 stash。只有只读确认没有 remote 时才进入 `local-only`，记录本地默认分支 HEAD 并禁止 push。
+Git 仓库必须在输出 `Analysis Brief` 之前按 Git workflow 调用 runner `inspect`。有 remote 时随后调用 `sync`，以 remote HEAD、`main`、`master` 的安全顺序解析默认分支并 fetch。`sync` 通过 Git ancestry（不按提交时间）选择最新安全默认分支：相同时使用本地 HEAD；本地是远端祖先时仅 fast-forward；远端是本地祖先，即 `local ahead` 时保留本地默认分支；两者互不为祖先才是真正分叉并 blocked。同步输出的 `Base SHA` 是所有新 task branch 的共同基线。dirty、diverged、detached、进行中的 Git 操作或同步失败时仍 blocked，不执行 reset、rebase 或 stash。只有只读确认没有 remote 时才进入 `local-only`，记录本地默认分支 HEAD 并禁止 push。
 
 先读取仓库指令和 `${PROJECT_ROOT}/project-map.md`，使用 `lookup-first` 匹配架构、路由、页面、组件及硬约束，再读取候选文件、直接依赖、相关测试和局部注释。代码与地图冲突时以代码为准并记录受影响 key；地图缺失或未命中时执行限定范围的 `rg` 搜索。
 
