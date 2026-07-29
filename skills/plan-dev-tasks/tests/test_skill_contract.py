@@ -29,6 +29,15 @@ class PlanDevTasksContractTest(unittest.TestCase):
             if cls.codex_runtime_path.exists()
             else ""
         )
+        cls.claude_runtime_path = ROOT / "references/runtime-claude-code.md"
+        cls.claude_runtime = (
+            cls.claude_runtime_path.read_text(encoding="utf-8")
+            if cls.claude_runtime_path.exists()
+            else ""
+        )
+        cls.claude_agent_root = (
+            ROOT.parents[1] / "adapters" / "claude-code" / "agents"
+        )
         cls.review = read("references/review-checklist.md")
         cls.git_workflow_path = ROOT / "references/git-workflow.md"
         cls.git_workflow = (
@@ -670,6 +679,123 @@ class PlanDevTasksContractTest(unittest.TestCase):
         ):
             with self.subTest(foreign_tool=foreign_tool):
                 self.assertNotIn(foreign_tool, self.codex_runtime)
+
+    def test_claude_runtime_adapter_is_routed_and_atomic(self) -> None:
+        self.assertTrue(self.claude_runtime_path.is_file())
+        self.assertIn(
+            "[runtime-claude-code.md](runtime-claude-code.md)",
+            self.runtime,
+        )
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "Platform: claude-code",
+                "Adapter version: 1",
+                "Worker transport: Agent(dev-with-tdd)",
+                "Authorization mode: atomic",
+                "`ExitPlanMode`",
+                "`AskUserQuestion`",
+                "Plan version",
+                "Context version",
+                "Task version",
+                "Task ID",
+                "Environment verification",
+                "Write permission: granted",
+                "派发前",
+                "handshake",
+                "不等待第二次",
+            ),
+        )
+        self.assertNotIn("Skill(dev-with-tdd)", self.claude_runtime)
+
+    def test_claude_serial_completion_immediately_enters_review(self) -> None:
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "Dispatch mode: foreground",
+                "Completion mode: foreground Agent result",
+                "串行",
+                "returned result",
+                "handoff-received",
+                "reviewing",
+                "立即",
+                "普通用户消息",
+            ),
+        )
+
+    def test_claude_parallel_requires_preapproval_aggregation_evidence(self) -> None:
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "L3",
+                "background-aggregate",
+                "最多 3",
+                "计划审批前",
+                "结果聚合",
+                "全部 handoff",
+                "串行",
+                "批准后",
+                "Git mode",
+            ),
+        )
+
+    def test_claude_adapter_excludes_other_runtime_transports(self) -> None:
+        for foreign_tool in (
+            "spawn_agent",
+            "send_message",
+            "followup_task",
+            "wait_agent",
+            "delegate_task",
+            "clarify",
+        ):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.claude_runtime)
+
+    def test_claude_custom_agents_load_their_corresponding_skills(self) -> None:
+        expected = {
+            "plan-dev-tasks": (
+                "唯一面向用户",
+                "Coordinator",
+                "Agent(dev-with-tdd)",
+            ),
+            "dev-with-tdd": (
+                "内部实现 worker",
+                "Execution Packet",
+                "不得",
+            ),
+        }
+        for name, body_markers in expected.items():
+            with self.subTest(agent=name):
+                path = self.claude_agent_root / f"{name}.md"
+                self.assertTrue(path.is_file())
+                definition = path.read_text(encoding="utf-8")
+                self.assertTrue(definition.startswith("---\n"))
+                self.assertRegex(definition, rf"(?m)^name: {re.escape(name)}$")
+                self.assertRegex(definition, r"(?m)^model: inherit$")
+                self.assertRegex(
+                    definition,
+                    rf"(?ms)^skills:\n  - {re.escape(name)}$",
+                )
+                self.assert_all(definition, body_markers)
+                self.assertNotIn("permissionMode:", definition)
+
+    def test_claude_installation_boundary_is_explicit(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "`~/.agents/platforms/claude-code/agents/`",
+                "`.claude`、`.claudeD`、`.claudeP`",
+                "`agents/`",
+                "`.codex` 和 `.hermes`",
+                "不得创建 `agents/`",
+                "默认 agent",
+                "权限",
+                "全局配置",
+                "新会话",
+                "重启",
+                "`/agents`",
+            ),
+        )
 
     def test_handoff_context_gap_and_replan_handling(self) -> None:
         self.assert_all(

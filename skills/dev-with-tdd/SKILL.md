@@ -207,5 +207,8 @@ Language check: passed
 - 两套 skill 必须成对、同版本安装。
 - `~/.agents/skills/dev-with-tdd` 为 canonical。
 - 仅当平台根目录已经存在时，才在 `.claude`、`.claudeD`、`.claudeP`、`.codex`、`.hermes` 的 `skills/` 下创建指向 canonical 的绝对软链接；不得创建缺失的平台根目录。
+- Claude Code 的命名 agent definitions canonical 安装到 `~/.agents/platforms/claude-code/agents/`；仅为已存在的 `.claude`、`.claudeD`、`.claudeP` 创建 `agents/` 绝对软链接，冲突目标先备份。
+- `.codex` 和 `.hermes` 不得创建 `agents/`；它们使用各自的原生运行时 worker，不使用 Claude agent definitions。
+- 安装器不得修改任何平台的默认 agent、权限或全局配置。Claude agent definitions 安装后需开启新会话或重启现有会话，才会出现在 `/agents`。
 - 替换既有 canonical 或冲突的链接目标前必须先创建唯一的同级备份；正确的现有软链接保持不变。
 - 不处理其他位置、hooks、配置或其他 skill。

@@ -30,6 +30,7 @@ Runtime Context:
 平台识别和能力核验完成后，仅按 `Platform` 加载下列匹配项：
 
 - `codex`：[runtime-codex.md](runtime-codex.md)
+- `claude-code`：[runtime-claude-code.md](runtime-claude-code.md)
 
 列表中没有匹配项时视为 adapter 缺失并 fail closed；不得选择相近平台或继续派发。
 
