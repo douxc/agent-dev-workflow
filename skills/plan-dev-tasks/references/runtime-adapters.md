@@ -31,6 +31,7 @@ Runtime Context:
 
 - `codex`：[runtime-codex.md](runtime-codex.md)
 - `claude-code`：[runtime-claude-code.md](runtime-claude-code.md)
+- `hermes`：[runtime-hermes.md](runtime-hermes.md)
 
 列表中没有匹配项时视为 adapter 缺失并 fail closed；不得选择相近平台或继续派发。
 

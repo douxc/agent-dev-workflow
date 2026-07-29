@@ -35,6 +35,20 @@ class PlanDevTasksContractTest(unittest.TestCase):
             if cls.claude_runtime_path.exists()
             else ""
         )
+        cls.hermes_runtime_path = ROOT / "references/runtime-hermes.md"
+        cls.hermes_runtime = (
+            cls.hermes_runtime_path.read_text(encoding="utf-8")
+            if cls.hermes_runtime_path.exists()
+            else ""
+        )
+        cls.hermes_transcript_path = (
+            ROOT / "tests" / "fixtures" / "hermes-delegation-transcript.txt"
+        )
+        cls.hermes_transcript = (
+            cls.hermes_transcript_path.read_text(encoding="utf-8")
+            if cls.hermes_transcript_path.exists()
+            else ""
+        )
         cls.claude_agent_root = (
             ROOT.parents[1] / "adapters" / "claude-code" / "agents"
         )
@@ -750,6 +764,119 @@ class PlanDevTasksContractTest(unittest.TestCase):
         ):
             with self.subTest(foreign_tool=foreign_tool):
                 self.assertNotIn(foreign_tool, self.claude_runtime)
+
+    def test_hermes_runtime_adapter_is_routed_and_atomic(self) -> None:
+        self.assertTrue(self.hermes_runtime_path.is_file())
+        self.assertIn(
+            "[runtime-hermes.md](runtime-hermes.md)",
+            self.runtime,
+        )
+        self.assert_all(
+            self.hermes_runtime,
+            (
+                "Platform: hermes",
+                "Adapter version: 1",
+                "Worker transport: delegate_task",
+                "Authorization mode: atomic",
+                "Coordinator 使用 `clarify`",
+                "child 不得调用 `clarify`",
+                "Plan version",
+                "Context version",
+                "Task version",
+                "Task ID",
+                "Environment verification",
+                "Write permission: granted",
+                "派发前",
+                "handshake",
+                "不等待第二次",
+            ),
+        )
+
+    def test_hermes_completion_resumes_review_or_blocks_safely(self) -> None:
+        self.assert_all(
+            self.hermes_runtime,
+            (
+                "result reinjection",
+                "synchronous delegate result",
+                "child identity",
+                "handoff-received",
+                "reviewing",
+                "立即",
+                "普通用户消息",
+                "session interruption",
+                "process restart",
+                "blocked",
+                "保留现场",
+            ),
+        )
+
+    def test_hermes_delegate_capabilities_concurrency_and_visibility(self) -> None:
+        self.assert_all(
+            self.hermes_runtime,
+            (
+                "actually registered `delegate_task`",
+                "fail closed",
+                "主上下文",
+                "冒充 child",
+                "最多 3",
+                "全部结果",
+                "`/skills`",
+                "temporary runtime instances",
+                "`.hermes/agents`",
+                "不得",
+            ),
+        )
+
+    def test_hermes_adapter_excludes_other_runtime_transports(self) -> None:
+        for foreign_tool in (
+            "spawn_agent",
+            "send_message",
+            "followup_task",
+            "wait_agent",
+            "Agent(dev-with-tdd)",
+            "Skill(dev-with-tdd)",
+            "request_user_input",
+            "ExitPlanMode",
+            "AskUserQuestion",
+        ):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.hermes_runtime)
+
+    def test_hermes_simulated_transcript_reaches_review_without_user_wakeup(
+        self,
+    ) -> None:
+        self.assertTrue(self.hermes_transcript_path.is_file())
+        ordered_events = (
+            "lifecycle=approved",
+            "approval=clarify-approved",
+            "authorization=atomic-complete",
+            "lifecycle=prepared",
+            "transport=delegate_task",
+            "lifecycle=dispatched",
+            "lifecycle=authorized",
+            "lifecycle=running",
+            "completion=result-reinjected",
+            "lifecycle=handoff-received",
+            "lifecycle=reviewing",
+        )
+        cursor = -1
+        for event in ordered_events:
+            with self.subTest(event=event):
+                position = self.hermes_transcript.find(event, cursor + 1)
+                self.assertGreater(position, cursor)
+                cursor = position
+        self.assert_all(
+            self.hermes_transcript,
+            (
+                "child=hermes-child-1",
+                "task-id=runtime-hermes-adapter",
+                "plan-version=1",
+                "context-version=1",
+                "task-version=1",
+                "handoff-authenticated=true",
+            ),
+        )
+        self.assertNotIn("user-message=continue", self.hermes_transcript)
 
     def test_claude_custom_agents_load_their_corresponding_skills(self) -> None:
         expected = {

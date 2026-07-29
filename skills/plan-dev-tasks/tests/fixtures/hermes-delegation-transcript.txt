@@ -1,0 +1,12 @@
+SIMULATED HERMES DELEGATION TRANSCRIPT
+[coordinator] lifecycle=approved approval=clarify-approved
+[coordinator] authorization=atomic-complete task-id=runtime-hermes-adapter plan-version=1 context-version=1 task-version=1
+[coordinator] lifecycle=prepared
+[coordinator] transport=delegate_task child=hermes-child-1
+[coordinator] lifecycle=dispatched
+[coordinator] lifecycle=authorized
+[child hermes-child-1] lifecycle=running handshake=validated
+[host] completion=result-reinjected child=hermes-child-1
+[coordinator] handoff-authenticated=true task-id=runtime-hermes-adapter plan-version=1 context-version=1 task-version=1
+[coordinator] lifecycle=handoff-received
+[coordinator] lifecycle=reviewing action=independent-review
