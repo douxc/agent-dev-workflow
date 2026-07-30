@@ -49,6 +49,17 @@ class PlanDevTasksContractTest(unittest.TestCase):
             if cls.hermes_transcript_path.exists()
             else ""
         )
+        cls.claude_dispatch_transcript_path = (
+            ROOT
+            / "tests"
+            / "fixtures"
+            / "claude-post-approval-dispatch-transcript.txt"
+        )
+        cls.claude_dispatch_transcript = (
+            cls.claude_dispatch_transcript_path.read_text(encoding="utf-8")
+            if cls.claude_dispatch_transcript_path.exists()
+            else ""
+        )
         cls.claude_agent_root = (
             ROOT.parents[1] / "adapters" / "claude-code" / "agents"
         )
@@ -765,7 +776,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
             self.claude_runtime,
             (
                 "Platform: claude-code",
-                "Adapter version: 1",
+                "Adapter version: 2",
                 "Worker transport: Agent(dev-with-tdd)",
                 "Authorization mode: atomic",
                 "`ExitPlanMode`",
@@ -782,6 +793,178 @@ class PlanDevTasksContractTest(unittest.TestCase):
             ),
         )
         self.assertNotIn("Skill(dev-with-tdd)", self.claude_runtime)
+
+    def test_shared_gate_only_applies_when_adapter_defines_it(self) -> None:
+        self.assert_all(
+            self.skill,
+            (
+                "`Post-approval dispatch gate` 只在匹配 adapter 显式定义时执行",
+                "`Claude Code v2` 强制定义并执行",
+                "未定义额外 gate",
+                "既有 prepared 与 authorization 契约",
+                "不授予 Coordinator 业务写权限",
+            ),
+        )
+
+    def test_claude_approval_plan_body_carries_gate_continuation(self) -> None:
+        self.assert_all(
+            self.approval,
+            (
+                "每个传给 `ExitPlanMode` 的审批计划正文",
+                "Plan version:",
+                "Context version:",
+                "Task version:",
+                "post-approval gate continuation",
+                "approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running",
+                "批准事件只进入 `approved`",
+                "不得授予 Coordinator 业务写权限",
+            ),
+        )
+
+    def test_claude_runtime_gate_is_version_bound_and_ordered(self) -> None:
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "Adapter version: 2",
+                "Post-approval dispatch gate",
+                "Approval event:",
+                "Plan version:",
+                "Context version:",
+                "Task version:",
+                "Task ID:",
+                "Coordinator write authority: none",
+                "Environment verification:",
+                "Dispatch mode:",
+                "Worker transport:",
+                "approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running",
+                "verify 必须先于 `prepared`",
+                "`authorized`",
+                "批准事件只进入 `approved`",
+                "不得授予 Coordinator 业务写权限",
+            ),
+        )
+
+    def test_claude_agent_enforces_gate_before_dispatch(self) -> None:
+        agent = (self.claude_agent_root / "plan-dev-tasks.md").read_text(
+            encoding="utf-8"
+        )
+        self.assert_all(
+            agent,
+            (
+                "Claude Adapter v2",
+                "Post-approval dispatch gate",
+                "approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running",
+                "runner `verify --require-clean`",
+                "Coordinator write authority: none",
+                "coordinator_direct_write",
+                "dispatch_mode_mismatch",
+                "foreground",
+                "background-aggregate",
+                "host completion notification",
+                "result aggregation",
+                "禁止 busy polling",
+            ),
+        )
+
+    def test_claude_gate_verifies_clean_state_and_preserves_direct_write(self) -> None:
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "runner `verify --require-clean`",
+                "workspace fingerprint",
+                "coordinator_direct_write",
+                "保留现场",
+                "不得 rollback",
+                "不得 stash",
+                "不得 clean",
+                "不得 commit",
+                "不得标记为 `accepted`",
+            ),
+        )
+
+    def test_claude_dispatch_mode_is_enforced_without_busy_polling(self) -> None:
+        self.assert_all(
+            self.claude_runtime,
+            (
+                "`L1`、`L2` 或单 worker",
+                "foreground",
+                "dispatch_mode_mismatch",
+                "只有已批准的 `L3`",
+                "background-aggregate",
+                "host completion notification",
+                "result aggregation",
+                "禁止 busy polling",
+                "shell",
+                "目录列表",
+                "紧密循环",
+            ),
+        )
+
+    def test_claude_post_approval_dispatch_transcript_covers_gate_outcomes(
+        self,
+    ) -> None:
+        self.assertTrue(self.claude_dispatch_transcript_path.is_file())
+        success_events = (
+            "scenario=successful-foreground",
+            "approval-event=exit-plan-mode-approved",
+            "lifecycle=approved",
+            "gate=post-approval-dispatch",
+            "environment-verification=runner-verify-require-clean result=passed",
+            "lifecycle=prepared",
+            "transport=Agent(dev-with-tdd) actual-dispatch-mode=foreground",
+            "lifecycle=dispatched",
+            "lifecycle=authorized",
+            "lifecycle=running",
+        )
+        cursor = -1
+        for event in success_events:
+            with self.subTest(event=event):
+                position = self.claude_dispatch_transcript.find(event, cursor + 1)
+                self.assertGreater(position, cursor)
+                cursor = position
+        self.assert_all(
+            self.claude_dispatch_transcript,
+            (
+                "plan-version=1 context-version=1 task-version=1",
+                "task-id=claude-success",
+                "coordinator-write-authority=none",
+                "blocked-reason=coordinator_direct_write",
+                "preserve-workspace=true",
+                "blocked-reason=dispatch_mode_mismatch",
+                "expected-dispatch-mode=foreground actual-dispatch-mode=background",
+                "scenario=approved-l3-background-aggregate",
+                "completion=host-completion-notification",
+                "aggregation=host-result-aggregation",
+            ),
+        )
+        for forbidden_event in (
+            "poll=shell",
+            "poll=directory-list",
+            "poll=tight-loop",
+            "lifecycle=accepted",
+            "action=rollback",
+            "action=stash",
+            "action=clean",
+            "action=commit",
+        ):
+            with self.subTest(forbidden_event=forbidden_event):
+                self.assertNotIn(forbidden_event, self.claude_dispatch_transcript)
+
+    def test_readme_documents_claude_post_approval_dispatch_gate(self) -> None:
+        readme = read("../../README.md")
+        self.assert_all(
+            readme,
+            (
+                "Claude Code post-approval dispatch gate",
+                "Adapter v2",
+                "coordinator_direct_write",
+                "dispatch_mode_mismatch",
+                "foreground",
+                "background-aggregate",
+                "host completion notification",
+                "禁止 busy polling",
+            ),
+        )
 
     def test_claude_serial_completion_immediately_enters_review(self) -> None:
         self.assert_all(

@@ -1,0 +1,36 @@
+SIMULATED CLAUDE CODE POST-APPROVAL DISPATCH TRANSCRIPT
+
+[scenario=successful-foreground]
+[host] approval-event=exit-plan-mode-approved plan-version=1 context-version=1 task-version=1 task-id=claude-success
+[coordinator] lifecycle=approved coordinator-write-authority=none
+[gate] gate=post-approval-dispatch adapter-version=2 plan-version=1 context-version=1 task-version=1 task-id=claude-success expected-dispatch-mode=foreground worker-transport=Agent(dev-with-tdd)
+[gate] environment-verification=runner-verify-require-clean result=passed
+[coordinator] lifecycle=prepared
+[coordinator] transport=Agent(dev-with-tdd) actual-dispatch-mode=foreground
+[coordinator] lifecycle=dispatched
+[coordinator] lifecycle=authorized
+[worker] lifecycle=running handshake=validated
+[host] completion=foreground-agent-result
+[coordinator] lifecycle=handoff-received
+[coordinator] lifecycle=reviewing
+
+[scenario=coordinator-direct-write-blocked]
+[host] approval-event=exit-plan-mode-approved plan-version=1 context-version=1 task-version=1 task-id=claude-direct-write
+[coordinator] lifecycle=approved coordinator-write-authority=none
+[gate] gate=post-approval-dispatch environment-verification=runner-verify-require-clean result=failed observed-new-business-diff=true
+[coordinator] lifecycle=blocked blocked-reason=coordinator_direct_write preserve-workspace=true
+
+[scenario=dispatch-mode-mismatch-blocked]
+[host] approval-event=exit-plan-mode-approved plan-version=1 context-version=1 task-version=1 task-id=claude-mode-mismatch
+[coordinator] lifecycle=approved coordinator-write-authority=none expected-dispatch-mode=foreground
+[gate] gate=post-approval-dispatch environment-verification=runner-verify-require-clean result=passed
+[coordinator] transport=Agent(dev-with-tdd) expected-dispatch-mode=foreground actual-dispatch-mode=background
+[coordinator] lifecycle=blocked blocked-reason=dispatch_mode_mismatch preserve-workspace=true
+
+[scenario=approved-l3-background-aggregate]
+[host] approval-event=exit-plan-mode-approved plan-version=1 context-version=1 task-version=1 task-id=claude-l3
+[coordinator] lifecycle=approved coordinator-write-authority=none approved-level=L3 expected-dispatch-mode=background-aggregate
+[gate] gate=post-approval-dispatch environment-verification=runner-verify-require-clean result=passed
+[coordinator] transport=Agent(dev-with-tdd) actual-dispatch-mode=background-aggregate
+[host] completion=host-completion-notification worker-handle=claude-worker-3
+[coordinator] aggregation=host-result-aggregation worker-handle=claude-worker-3

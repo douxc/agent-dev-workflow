@@ -5,11 +5,11 @@
 ```text
 Runtime Context:
   Platform: claude-code
-  Adapter version: 1
+  Adapter version: 2
   Worker transport: Agent(dev-with-tdd)
   Dispatch mode: foreground | background-aggregate
   Authorization mode: atomic
-  Completion mode: foreground Agent result | explicit background result aggregation
+  Completion mode: foreground Agent result | host completion notification + result aggregation
   Capability evidence: authenticated Claude Code runtime metadata, registered Agent tool, named dev-with-tdd custom agent, and proven result return path
 ```
 
@@ -26,15 +26,42 @@ Coordinator 派发前必须取得最小能力证据：
 
 必要能力缺失、custom agent 未加载、返回来源不确定或平台信号冲突时 fail closed。不得用普通 skill 加载动作冒充独立 worker transport，也不得在共享主上下文直接实现后伪造 handoff。
 
+## Post-approval dispatch gate
+
+Adapter v2 把批准返回与 worker 运行之间定义为版本绑定的 `Post-approval dispatch gate`。`ExitPlanMode` 或 `AskUserQuestion` 的批准事件只进入 `approved`，不得授予 Coordinator 业务写权限；派发路径固定为 `approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running`。gate 是派发前的 Claude adapter checkpoint，不新增或替代共享生命周期状态。
+
+Coordinator 必须为每个 packet 形成以下 gate record，任一字段缺失或与批准的 Execution Packet 不一致时 fail closed：
+
+```text
+Post-approval dispatch gate:
+  Approval event: ExitPlanMode approved | AskUserQuestion approved
+  Plan version:
+  Context version:
+  Task version:
+  Task ID:
+  Coordinator write authority: none
+  Environment verification:
+  Dispatch mode: foreground | background-aggregate
+  Worker transport: Agent(dev-with-tdd)
+```
+
+gate 严格按下列顺序执行：
+
+1. 认证 approval event，并核对 `Plan version`、`Context version`、`Task version`、`Task ID`、adapter v2、批准的 `Dispatch mode` 和 `Worker transport`。
+2. 确认 `Coordinator write authority: none`。批准不允许 Coordinator 直接编辑业务文件、运行会产生业务 diff 的实现工具或伪造 worker handoff。
+3. 在任何实现工具前，Git 项目必须立即通过 bundled runner `verify --require-clean` 核对 exact Worktree、Task branch、Expected HEAD、Base SHA 和 clean 状态；非 Git 项目必须重新核对批准时的 workspace fingerprint、允许路径与边界。
+4. 若验证发现批准后新增业务 diff，立即转为 `blocked`，原因固定为 `coordinator_direct_write`，保留现场。不得 rollback、不得 stash、不得 clean、不得 commit，也不得标记为 `accepted`。
+5. verify 必须先于 `prepared`。验证通过后才进入共享生命周期的 `prepared`、创建 Worker Record，并使用批准的 worker transport 和 dispatch mode 派发。实际 dispatch mode 与 gate record 不一致时立即转为 `blocked`，原因固定为 `dispatch_mode_mismatch`；保留现场且不得进入 `dispatched`、`authorized` 或 `running`。
+
 ## 原子授权与派发
 
 Claude Code 使用 `Authorization mode: atomic`，避免 worker 在 handshake 后停下并等待一条普通用户消息。
 
-1. Coordinator 在派发前核对 `Plan version`、`Context version`、`Task version` 和 `Task ID`。
-2. Git 项目通过 runner `verify` 核对实际 Worktree、Task branch、Expected HEAD 与 Base SHA；非 Git 项目完成 workspace 边界验证。
-3. Coordinator 创建 Coordinator-only Worker Record，并在初始 Execution Packet 中直接写入完整 `Authorization Evidence`，包含可复核的 `Environment verification` 和 `Write permission: granted`。
-4. Coordinator 使用 `Agent(dev-with-tdd)` 派发一个只服务该 Task ID 的命名 worker，并把返回 handle 或前台调用标识写入 Worker Record。
-5. worker 校验 packet，返回版本化 handshake 后直接进入实现，不等待第二次 Coordinator 消息或用户输入。
+1. Coordinator 从已通过的 gate record 取得 `Plan version`、`Context version`、`Task version`、`Task ID` 与最新环境验证证据，并迁移为 `prepared`。
+2. Coordinator 在初始 Execution Packet 中直接写入完整 `Authorization Evidence`，包含可复核的 `Environment verification` 和 `Write permission: granted`。
+3. Coordinator 使用 `Agent(dev-with-tdd)` 派发一个只服务该 Task ID 的命名 worker，把返回 handle 或前台调用标识写入 Worker Record，并迁移为 `dispatched`。
+4. 实际调用必须符合 gate record：`L1`、`L2` 或单 worker 一律以前台 `Agent(dev-with-tdd)` 运行。若宿主实际建立后台任务，即使请求参数看似正确，也以 `dispatch_mode_mismatch` 阻断。
+5. worker 校验 packet 并返回版本化 handshake 后，Coordinator 迁移为 `authorized`；worker 随后进入 `running` 并直接实现，不等待第二次 Coordinator 消息或用户输入。
 
 初始 packet 的授权证据为 pending、版本不一致、Git/workspace 证据过期或写入许可未明确 granted 时不得派发；状态转为 `context-gap` 或 `blocked`。原子授权不减少校验，只把完整校验结果绑定到首次派发。
 
@@ -53,9 +80,11 @@ Coordinator 不得在 Agent 返回后正常结束或等待普通用户消息来�
 
 ## L3 并行与结果聚合
 
-Claude Code 同时最多 3 个后台 Agent。L3 只有在计划审批前已经取得结果聚合能力证据，并在计划和 Runtime Context 中明确选择 `Dispatch mode: background-aggregate` 时才可并行。
+Claude Code 同时最多 3 个后台 Agent。只有已批准的 `L3` background-aggregate packet，且计划审批前已经取得结果聚合能力证据，并在计划和 Runtime Context 中明确选择 `Dispatch mode: background-aggregate` 时才可后台并行。`L1`、`L2` 或单 worker 不得后台运行。
 
-Coordinator 必须保存每个后台 Agent 的 handle，显式等待并聚合全部 handoff；每个 handoff 到达后立即进入该 packet 的 review，同时继续跟踪其他 worker。结果聚合能力没有在计划审批前证明时，计划本身必须选择串行。
+后台完成必须依赖宿主提供的 `host completion notification` 唤醒 Coordinator，并通过宿主 `result aggregation` 收齐和认证全部 handoff。Coordinator 保存每个后台 Agent 的 handle；每个 handoff 到达后立即进入该 packet 的 review，同时继续跟踪其他 worker。结果聚合能力没有在计划审批前证明时，计划本身必须选择前台串行。
+
+禁止 busy polling。不得用 shell 查询、目录列表或紧密循环轮询后台状态，也不得把固定间隔的重复检查包装成等待机制；宿主 completion notification 或 result aggregation 不可用时必须 `blocked`。
 
 不得在批准后把串行静默改为并行，或反向改变已批准的 Git mode。能力变化若会改变 dispatch 或 Git mode，必须重新规划并使旧批准失效。
 

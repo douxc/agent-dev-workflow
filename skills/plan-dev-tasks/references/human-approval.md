@@ -66,10 +66,12 @@ Codex 分支不得调用 Claude Code 或 Hermes 工具，包括 `ExitPlanMode`�
 
 运行时识别为 Claude Code 后：
 
-1. 在 Plan mode 且 `ExitPlanMode` 当前可用时，必须用 `ExitPlanMode` 呈现包含三个版本值的计划并请求批准；不得改用 `AskUserQuestion`。
+1. 在 Plan mode 且 `ExitPlanMode` 当前可用时，每个传给 `ExitPlanMode` 的审批计划正文必须包含 `Plan version:`、`Context version:`、`Task version:`，并明确写出 `post-approval gate continuation`：`approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running`；随后用 `ExitPlanMode` 呈现该计划并请求批准，不得改用 `AskUserQuestion`。
 2. 非 Plan 场景才可使用 `AskUserQuestion`，且必须是单选的 `批准并继续 (Recommended)`、`修改计划`、`取消任务` 三选项。
 3. Plan mode 缺少 `ExitPlanMode`、非 Plan 场景缺少 `AskUserQuestion`，或非交互宿主无法承载所需 human interaction 时，返回 `Decision: blocked`；不得降级为普通文本审批。
 4. 只把原生交互对当前计划的明确批准事件认证为 `approved`；要求修改映射为 `revise`，明确取消映射为 `cancel`，拒绝、关闭、工具错误或不明确结果映射为 `blocked`。
+
+`ExitPlanMode` 或 `AskUserQuestion` 的批准事件只进入 `approved`，不得授予 Coordinator 业务写权限。批准返回后必须按 Claude adapter v2 的 `approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running` 路径继续；gate 通过前不得直接实现、运行实现工具或把 Coordinator 写入包装成 worker 结果。
 
 Claude Code 分支不得借用 Codex 或 Hermes 的审批入口，不得调用 `request_user_input`、`clarify`、`clarify.respond`、`approval.request` 或 `approval.respond`。
 

@@ -85,6 +85,8 @@ Coordinator 保存地图与工作区基线 fingerprint，用于最终检查并�
 
 审批选择的规范文案为 `批准并继续 (Recommended)`、`修改计划`、`取消任务`。同一版本只请求一次审批；沉默、超时、工具拒绝、取消或模糊回答均不得视为批准。只有认证后的 `approved` 可以进入自动调度。
 
+`approved` 只表示当前版本计划获准进入匹配 adapter 定义的准备与派发流程，不授予 Coordinator 业务写权限；匹配 adapter 显式定义 post-approval gate 时，只获准进入该 gate。Coordinator 在 worker 受控运行前的业务写权限始终为 `none`；不得把批准事件解释为可以直接实现、先修改后派发或补做验证。
+
 批准覆盖完整版本。新增 feature，或改变验收标准、公共接口、依赖、迁移、安全影响、外部副作用或允许写入范围时，旧批准立即失效并重新规划。批准范围内的实现细节调整不重新审批。
 
 ## 5. 自动调度
@@ -99,6 +101,23 @@ Context version:
 Task version:
 Task ID:
 ```
+
+`Post-approval dispatch gate` 只在匹配 adapter 显式定义时执行；`Claude Code v2` 强制定义并执行。未定义额外 gate 的 adapter 继续遵循自身既有 prepared 与 authorization 契约，不得从共享 core 推断或伪造额外 gate。匹配 adapter 定义 gate 时，任何实现工具运行前都必须执行，且 gate 记录必须与当前批准和 packet 精确绑定：
+
+```text
+Post-approval dispatch gate:
+  Approval event:
+  Plan version:
+  Context version:
+  Task version:
+  Task ID:
+  Coordinator write authority: none
+  Environment verification:
+  Dispatch mode:
+  Worker transport:
+```
+
+gate 必须重新验证执行环境与批准的 dispatch mode，不能复用批准前的陈旧结果。若发现批准后出现 Coordinator 业务写入，转为 `blocked`，原因固定为 `coordinator_direct_write`，保留现场；不得 rollback、不得 stash、不得 clean、不得 commit，也不得标记为 `accepted`。若实际派发模式与已批准的 `Dispatch mode` 不一致，转为 `blocked`，原因固定为 `dispatch_mode_mismatch`，不得进入 `running`。平台 adapter 可以增加更严格的 gate 约束，不得放宽这些共享条件。
 
 `Authorization mode: two-phase` 时，派发后必须先取得：
 

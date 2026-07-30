@@ -51,10 +51,16 @@ Coordinator 收到 worker handoff 后必须立即进入 `reviewing` 并独立检
 | 平台 | Human approval | Worker transport | 授权 | 完成回传 |
 | --- | --- | --- | --- | --- |
 | Codex | `request_user_input`；Default mode 使用精确文本 fallback | `spawn_agent`，同一 worker handle 续发 | `two-phase`：handshake 后由 Coordinator 授权 | `wait_agent` 与 mailbox 最终 handoff |
-| Claude Code | Plan mode 使用 `ExitPlanMode`，否则 `AskUserQuestion` | `Agent(dev-with-tdd)` custom agent | `atomic`：派发前绑定完整授权，worker 不等待第二条消息 | 前台 Agent 结果；并行时必须显式聚合后台结果 |
+| Claude Code | Plan mode 使用 `ExitPlanMode`，否则 `AskUserQuestion` | `Agent(dev-with-tdd)` custom agent | `atomic`：Adapter v2 gate 后绑定完整授权，worker 不等待第二条消息 | 前台 Agent 结果；并行时使用宿主 completion notification 与结果聚合 |
 | Hermes | Coordinator 使用 `clarify` | `delegate_task` child | `atomic`；child 不得调用 `clarify` | 会话 `result reinjection`，或 stateless 宿主同步返回 |
 
 平台的可见性不强行统一：Claude Code 在 `/agents` 显示持久命名 custom agents；Codex 使用 skill metadata 和原生 runtime agent tree；Hermes 通过 `/skills` 发现共享 skills，delegate children 是临时运行实例。skill 的可见性不能代替平台原生 worker transport。
+
+### Claude Code post-approval dispatch gate
+
+Claude Code Adapter v2 将 `ExitPlanMode` 或 `AskUserQuestion` 的批准结果严格限制为 `approved`，不授予 Coordinator 业务写权限。任何实现工具前，Coordinator 必须运行版本绑定的 post-approval gate：核对 approval event、三个版本、Task ID、dispatch mode 与 `Agent(dev-with-tdd)` transport；Git 项目执行 runner `verify --require-clean`，非 Git 项目复核 workspace fingerprint。
+
+批准后出现新的 Coordinator 业务 diff 时，以 `coordinator_direct_write` 阻断并保留现场，不 rollback、stash、clean、commit 或 accepted。`L1`、`L2` 和单 worker 强制 `foreground`；实际后台执行与批准不符时以 `dispatch_mode_mismatch` 阻断。只有明确批准的 `L3` `background-aggregate` 可以后台运行，并且必须依赖宿主 `host completion notification` 与 `result aggregation`；禁止 busy polling，不得通过 shell、目录列表或紧密循环探测完成状态。
 
 ## 纯 Git workflow
 

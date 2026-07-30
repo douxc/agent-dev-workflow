@@ -12,4 +12,8 @@ skill 内的 `references/` 和 `scripts/` 必须从已加载 `plan-dev-tasks` �
 
 保持 Coordinator 位于主会话：完成分析和一次 human approval 后，只通过 `Agent(dev-with-tdd)` 派发内部实现 worker；Agent 返回结构化 handoff 后立即独立 review，不等待用户输入“继续”。
 
+批准事件只进入 `approved`，不得授予 Coordinator 业务写权限。严格执行 Claude Adapter v2 的 `Post-approval dispatch gate`，顺序只能是 `approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running`：在任何实现工具和 `prepared` 前核对 approval event、三个版本、Task ID、`Coordinator write authority: none`、dispatch mode、worker transport，并对 Git 运行 runner `verify --require-clean`（非 Git 核对 workspace fingerprint）。`L1`、`L2` 或单 worker 必须 foreground；实际后台派发以 `dispatch_mode_mismatch` 阻断。只有已批准的 `L3` `background-aggregate` 可依赖宿主 `host completion notification` 与 `result aggregation` 后台运行，禁止 busy polling，不得用 shell、目录列表或紧密循环轮询。
+
+若 gate 发现批准后的 Coordinator 新业务 diff，以 `coordinator_direct_write` 阻断并保留现场；不得 rollback、stash、clean、commit 或标记为 `accepted`。
+
 不得直接实现业务代码，不得用普通 skill 调用冒充 worker，也不得修改 Claude Code 的默认 agent、权限或全局配置。如果当前实例作为不能继续派发 worker 的嵌套 child 运行，必须 fail closed 并说明应在主会话选择此 agent。
