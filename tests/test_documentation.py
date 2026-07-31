@@ -16,11 +16,10 @@ class DocumentationContractTest(unittest.TestCase):
             with self.subTest(snippet=snippet):
                 self.assertIn(snippet, self.readme)
 
-    def test_documents_platform_neutral_core_and_adapter_selection(self) -> None:
+    def test_documents_platform_neutral_core_and_flow_selection(self) -> None:
         self.assert_readme_contains(
-            "Codex、Claude Code 与 Hermes",
+            "Claude Code 与 Hermes",
             "平台无关",
-            "runtime adapter",
             "只加载一个",
             "fail closed",
         )
@@ -42,10 +41,6 @@ class DocumentationContractTest(unittest.TestCase):
 
     def test_documents_each_platform_runtime_contract(self) -> None:
         self.assert_readme_contains(
-            "request_user_input",
-            "spawn_agent",
-            "two-phase",
-            "wait_agent",
             "ExitPlanMode",
             "AskUserQuestion",
             "Agent(dev-with-tdd)",
@@ -59,13 +54,18 @@ class DocumentationContractTest(unittest.TestCase):
     def test_documents_installation_and_platform_boundaries(self) -> None:
         self.assert_readme_contains(
             "https://github.com/douxc/agent-dev-workflow.git",
-            "~/.agents/skills/plan-dev-tasks",
-            "~/.agents/skills/dev-with-tdd",
-            "~/.agents/platforms/claude-code/agents/",
+            "直接复制到每个已存在平台根目录的 `skills/` 下",
+            "~/.claude/skills/plan-dev-tasks",
+            "~/.claude/skills/dev-with-tdd",
+            "直接复制到每个已存在的 `.claude`、`.claudeD`、`.claudeP` 的 `agents/` 下",
+            "~/.claude/agents/plan-dev-tasks.md",
+            "~/.claude/agents/dev-with-tdd.md",
+            "源仓库是唯一 canonical 来源",
+            "不保留单独的 canonical 副本",
+            "也不创建任何软链接",
             ".claude",
             ".claudeD",
             ".claudeP",
-            ".codex/agents",
             ".hermes/agents",
             "新会话",
             "永久删除",
@@ -79,10 +79,8 @@ class DocumentationContractTest(unittest.TestCase):
     def test_documents_repository_layout_and_validation(self) -> None:
         self.assert_readme_contains(
             "adapters/claude-code/agents/",
-            "runtime-adapters.md",
-            "runtime-codex.md",
-            "runtime-claude-code.md",
-            "runtime-hermes.md",
+            "claude-code-flow.md",
+            "hermes-flow.md",
             "python3 -m unittest discover -s tests -p 'test_*.py'",
             "python3 -m unittest discover -s skills/plan-dev-tasks/tests -p 'test_*.py'",
             "python3 -m unittest discover -s skills/dev-with-tdd/tests -p 'test_*.py'",

@@ -68,26 +68,25 @@ class DevWithTddContractTest(unittest.TestCase):
                 "Task ID:",
                 "Loaded skill: dev-with-tdd",
                 "Approval inherited: yes",
-                "确认完成前不得修改任何文件",
+                "核对成功后无需等待第二次 Coordinator 确认",
             ),
         )
 
-    def test_runtime_context_supports_two_phase_and_atomic_authorization(self) -> None:
+    def test_runtime_context_is_atomic_only(self) -> None:
         self.assert_all(
             self.skill,
             (
                 "Runtime Context:",
-                "Platform: codex | claude-code | hermes",
-                "Adapter version:",
+                "Platform: claude-code | hermes",
+                "Platform flow:",
                 "Worker transport:",
                 "Dispatch mode: foreground | background-aggregate",
-                "Authorization mode: two-phase | atomic",
+                "Authorization mode: atomic",
                 "Completion mode:",
                 "Capability evidence:",
-                "`two-phase`",
-                "`atomic`",
             ),
         )
+        self.assertNotIn("two-phase", self.skill)
 
     def test_atomic_authorization_is_complete_and_cannot_be_fabricated(self) -> None:
         self.assert_all(
@@ -106,19 +105,6 @@ class DevWithTddContractTest(unittest.TestCase):
                 "派发前",
                 "不得自行补全、推断或伪造",
                 "无需等待第二次 Coordinator 确认",
-            ),
-        )
-
-    def test_two_phase_still_requires_coordinator_confirmation(self) -> None:
-        self.assert_all(
-            self.skill,
-            (
-                "`two-phase`",
-                "返回 handshake",
-                "等待 Coordinator",
-                "runner `verify` 已通过",
-                "明确允许写入",
-                "确认完成前不得修改任何文件",
             ),
         )
 
@@ -323,22 +309,24 @@ class DevWithTddContractTest(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, self.combined)
 
-    def test_installation_uses_canonical_pair_and_platform_links(self) -> None:
+    def test_installation_uses_canonical_pair_and_direct_copies(self) -> None:
         self.assert_all(
             self.skill,
             (
                 "两套 skill 必须成对、同版本安装",
-                "`~/.agents/skills/dev-with-tdd` 为 canonical",
-                "仅当平台根目录已经存在",
-                "`.claude`、`.claudeD`、`.claudeP`、`.codex`、`.hermes`",
-                "绝对软链接",
-                "不得创建缺失的平台根目录",
+                "直接成对复制到每个已存在平台根目录的 `skills/` 下",
+                "源仓库为唯一 canonical 来源",
+                "不保留单独的 canonical 副本",
+                "也不创建任何软链接",
+                "平台根目录不存在时输出 `skip`",
+                "`.claude`、`.claudeD`、`.claudeP`、`.hermes`",
                 "永久删除",
                 "先删除再",
             ),
         )
         self.assertNotIn("备份", self.skill)
         self.assertNotIn("独立同步副本", self.skill)
+        self.assertNotIn("绝对软链接", self.skill)
 
     def test_language_contract(self) -> None:
         self.assert_all(self.skill, ("默认使用简体中文", "必要技术字面量"))

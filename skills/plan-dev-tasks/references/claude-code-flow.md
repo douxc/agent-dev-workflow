@@ -1,11 +1,11 @@
-# Claude Code Runtime Adapter
+# Claude Code 平台流程
 
-本文件只把共享 Runtime Adapter 契约映射到 Claude Code 原生 custom agent 能力。加载条件是 `Runtime Context` 已认证为 Claude Code；共享生命周期、Worker Record 和审查规则仍以 [runtime-adapters.md](runtime-adapters.md) 为准。
+本文件是 Claude Code 平台的具体执行流程，把平台无关的状态机、Execution Packet、Git workflow、审查与清理契约（见 [SKILL.md](../SKILL.md)、[git-workflow.md](git-workflow.md)、[task-packet.md](task-packet.md)、[review-checklist.md](review-checklist.md)）映射到 Claude Code 原生能力。加载条件是已按 capability 选定本 flow。
 
 ```text
 Runtime Context:
   Platform: claude-code
-  Adapter version: 2
+  Platform flow: claude-code-flow.md
   Worker transport: Agent(dev-with-tdd)
   Dispatch mode: foreground | background-aggregate
   Authorization mode: atomic
@@ -13,9 +13,11 @@ Runtime Context:
   Capability evidence: authenticated Claude Code runtime metadata, registered Agent tool, named dev-with-tdd custom agent, and proven result return path
 ```
 
-## Human approval 与能力选择
+## Human approval
 
-计划审批沿用 [human-approval.md](human-approval.md) 的 Claude Code 分支：Plan mode 使用 `ExitPlanMode`，非 Plan 场景使用 `AskUserQuestion`。审批能力、custom agent 可见性和结果回传能力必须分别验证。
+计划审批沿用 [human-approval.md](human-approval.md)：Plan mode 使用 `ExitPlanMode`，非 Plan 场景使用 `AskUserQuestion`。审批能力、custom agent 可见性和结果回传能力必须分别验证。
+
+每个传给 `ExitPlanMode` 的审批计划正文必须包含 `Plan version:`、`Context version:`、`Task version:` 与 post-approval gate continuation；批准事件只进入 `approved`，不得授予 Coordinator 业务写权限。
 
 Coordinator 派发前必须取得最小能力证据：
 
@@ -28,7 +30,7 @@ Coordinator 派发前必须取得最小能力证据：
 
 ## Post-approval dispatch gate
 
-Adapter v2 把批准返回与 worker 运行之间定义为版本绑定的 `Post-approval dispatch gate`。`ExitPlanMode` 或 `AskUserQuestion` 的批准事件只进入 `approved`，不得授予 Coordinator 业务写权限；派发路径固定为 `approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running`。gate 是派发前的 Claude adapter checkpoint，不新增或替代共享生命周期状态。
+`ExitPlanMode` 或 `AskUserQuestion` 的批准事件只进入 `approved`，不得授予 Coordinator 业务写权限。派发路径固定为 `approved -> gate（完成 verify） -> prepared -> Agent(dev-with-tdd) -> dispatched -> authorized -> running`。gate 是派发前的 Claude Code checkpoint，执行 SKILL.md 定义的全部 gate 不变量。
 
 Coordinator 必须为每个 packet 形成以下 gate record，任一字段缺失或与批准的 Execution Packet 不一致时 fail closed：
 
@@ -47,7 +49,7 @@ Post-approval dispatch gate:
 
 gate 严格按下列顺序执行：
 
-1. 认证 approval event，并核对 `Plan version`、`Context version`、`Task version`、`Task ID`、adapter v2、批准的 `Dispatch mode` 和 `Worker transport`。
+1. 认证 approval event，并核对 `Plan version`、`Context version`、`Task version`、`Task ID`、批准的 `Dispatch mode` 和 `Worker transport`。
 2. 确认 `Coordinator write authority: none`。批准不允许 Coordinator 直接编辑业务文件、运行会产生业务 diff 的实现工具或伪造 worker handoff。
 3. 在任何实现工具前，Git 项目必须立即通过 bundled runner `verify --require-clean` 核对 exact Worktree、Task branch、Expected HEAD、Base SHA 和 clean 状态；非 Git 项目必须重新核对批准时的 workspace fingerprint、允许路径与边界。
 4. 若验证发现批准后新增业务 diff，立即转为 `blocked`，原因固定为 `coordinator_direct_write`，保留现场。不得 rollback、不得 stash、不得 clean、不得 commit，也不得标记为 `accepted`。
@@ -63,7 +65,7 @@ Claude Code 使用 `Authorization mode: atomic`，避免 worker 在 handshake �
 4. 实际调用必须符合 gate record：`L1`、`L2` 或单 worker 一律以前台 `Agent(dev-with-tdd)` 运行。若宿主实际建立后台任务，即使请求参数看似正确，也以 `dispatch_mode_mismatch` 阻断。
 5. worker 校验 packet 并返回版本化 handshake 后，Coordinator 迁移为 `authorized`；worker 随后进入 `running` 并直接实现，不等待第二次 Coordinator 消息或用户输入。
 
-初始 packet 的授权证据为 pending、版本不一致、Git/workspace 证据过期或写入许可未明确 granted 时不得派发；状态转为 `context-gap` 或 `blocked`。原子授权不减少校验，只把完整校验结果绑定到首次派发。
+初始 packet 的授权证据缺失、版本不一致、Git/workspace 证据过期或写入许可未明确 granted 时不得派发；状态转为 `context-gap` 或 `blocked`。原子授权不减少校验，只把完整校验结果绑定到首次派发。
 
 ## 串行完成与自动审查
 
@@ -76,7 +78,7 @@ Claude Code 使用 `Authorization mode: atomic`，避免 worker 在 handshake �
 3. 立即进入 `reviewing` 并独立检查实际 diff 与可复现验证；
 4. 根据审查结果进入 `accepted`、`rework`、`context-gap` 或 `blocked`。
 
-Coordinator 不得在 Agent 返回后正常结束或等待普通用户消息来唤醒审查。结果为空、来源不确定、会话中断或无法认证最终 handoff 时转为 `blocked` 并保留现场。
+Coordinator 不得在 Agent 返回后正常结束或等待普通用户消息来唤醒审查。结果为空、来源不确定、会话中断或无法认证最终 handoff 时转为 `blocked` 并保留现场。需要 rework 时通过同一命名 worker 续发窄反馈；worker handle 已失效时转为 `blocked`。
 
 ## L3 并行与结果聚合
 

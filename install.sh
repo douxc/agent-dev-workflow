@@ -3,7 +3,7 @@
 set -euo pipefail
 
 readonly SKILL_NAMES="plan-dev-tasks dev-with-tdd"
-readonly PLATFORM_NAMES=".claude .claudeD .claudeP .codex .hermes"
+readonly PLATFORM_NAMES=".claude .claudeD .claudeP .hermes"
 readonly CLAUDE_PLATFORM_NAMES=".claude .claudeD .claudeP"
 readonly CLAUDE_AGENT_NAMES="plan-dev-tasks dev-with-tdd"
 
@@ -14,6 +14,13 @@ fail() {
 
 path_exists() {
   [ -e "$1" ] || [ -L "$1" ]
+}
+
+# A container is a regular file (not a dir, not a symlink). Such a path blocks
+# installation and must fail closed instead of being silently clobbered.
+is_blocking_file() {
+  local target="$1"
+  path_exists "$target" && [ ! -d "$target" ] && [ ! -L "$target" ]
 }
 
 remove_existing() {
@@ -48,8 +55,6 @@ fi
 readonly SCRIPT_DIR="$(CDPATH= cd "$(dirname "$0")" && pwd -P)"
 readonly SOURCE_ROOT="$SCRIPT_DIR/skills"
 readonly CLAUDE_AGENT_SOURCE_ROOT="$SCRIPT_DIR/adapters/claude-code/agents"
-readonly CANONICAL_ROOT="$HOME_DIR/.agents/skills"
-readonly CANONICAL_CLAUDE_AGENT_ROOT="$HOME_DIR/.agents/platforms/claude-code/agents"
 
 for skill in $SKILL_NAMES; do
   if [ ! -d "$SOURCE_ROOT/$skill" ] || [ ! -f "$SOURCE_ROOT/$skill/SKILL.md" ]; then
@@ -64,50 +69,59 @@ for agent in $CLAUDE_AGENT_NAMES; do
   fi
 done
 
+# Validate every platform container up front, before any deletion or copy, so a
+# blocking path in one platform never causes partial mutation of another.
 for platform in $PLATFORM_NAMES; do
   platform_root="$HOME_DIR/$platform"
+  [ -d "$platform_root" ] || continue
   platform_skills="$platform_root/skills"
-  if [ -d "$platform_root" ] && path_exists "$platform_skills" && [ ! -d "$platform_skills" ]; then
+  if is_blocking_file "$platform_skills"; then
     fail "platform skills path is not a directory: $platform_skills"
   fi
 done
 
-readonly AGENTS_ROOT="$HOME_DIR/.agents"
-mkdir -p "$AGENTS_ROOT"
-staging_dir="$(mktemp -d "$AGENTS_ROOT/.install.XXXXXX")"
-
-cleanup_staging() {
-  if [ -n "${staging_dir:-}" ] && [ -d "$staging_dir" ]; then
-    case "$staging_dir" in
-      "$AGENTS_ROOT"/.install.*) rm -rf "$staging_dir" ;;
-    esac
+for platform in $CLAUDE_PLATFORM_NAMES; do
+  platform_root="$HOME_DIR/$platform"
+  [ -d "$platform_root" ] || continue
+  platform_agents="$platform_root/agents"
+  if is_blocking_file "$platform_agents"; then
+    fail "platform agents path is not a directory: $platform_agents"
   fi
+done
+
+install_skills_into() {
+  local platform_root="$1"
+  local platform_skills="$platform_root/skills"
+
+  if [ -L "$platform_skills" ]; then
+    remove_existing "$platform_skills"
+  fi
+  mkdir -p "$platform_skills"
+
+  for skill in $SKILL_NAMES; do
+    local dest="$platform_skills/$skill"
+    remove_existing "$dest"
+    cp -R "$SOURCE_ROOT/$skill" "$dest"
+    printf 'install %s\n' "$dest"
+  done
 }
-trap cleanup_staging EXIT HUP INT TERM
 
-mkdir "$staging_dir/skills" "$staging_dir/claude-agents"
-for skill in $SKILL_NAMES; do
-  cp -R "$SOURCE_ROOT/$skill" "$staging_dir/skills/$skill"
-done
-for agent in $CLAUDE_AGENT_NAMES; do
-  cp "$CLAUDE_AGENT_SOURCE_ROOT/$agent.md" "$staging_dir/claude-agents/$agent.md"
-done
+install_agents_into() {
+  local platform_root="$1"
+  local platform_agents="$platform_root/agents"
 
-mkdir -p "$CANONICAL_ROOT" "$(dirname "$CANONICAL_CLAUDE_AGENT_ROOT")"
-for skill in $SKILL_NAMES; do
-  canonical_target="$CANONICAL_ROOT/$skill"
-  remove_existing "$canonical_target"
-  mv "$staging_dir/skills/$skill" "$canonical_target"
-  printf 'install %s\n' "$canonical_target"
-done
-rmdir "$staging_dir/skills"
+  if [ -L "$platform_agents" ]; then
+    remove_existing "$platform_agents"
+  fi
+  mkdir -p "$platform_agents"
 
-remove_existing "$CANONICAL_CLAUDE_AGENT_ROOT"
-mv "$staging_dir/claude-agents" "$CANONICAL_CLAUDE_AGENT_ROOT"
-printf 'install %s\n' "$CANONICAL_CLAUDE_AGENT_ROOT"
-
-rmdir "$staging_dir"
-staging_dir=""
+  for agent in $CLAUDE_AGENT_NAMES; do
+    local dest="$platform_agents/$agent.md"
+    remove_existing "$dest"
+    cp "$CLAUDE_AGENT_SOURCE_ROOT/$agent.md" "$dest"
+    printf 'install %s\n' "$dest"
+  done
+}
 
 for platform in $PLATFORM_NAMES; do
   platform_root="$HOME_DIR/$platform"
@@ -116,17 +130,7 @@ for platform in $PLATFORM_NAMES; do
     continue
   fi
 
-  platform_skills="$platform_root/skills"
-  mkdir -p "$platform_skills"
-
-  for skill in $SKILL_NAMES; do
-    canonical_target="$CANONICAL_ROOT/$skill"
-    link_target="$platform_skills/$skill"
-
-    remove_existing "$link_target"
-    ln -s "$canonical_target" "$link_target"
-    printf 'link %s -> %s\n' "$link_target" "$canonical_target"
-  done
+  install_skills_into "$platform_root"
 done
 
 for platform in $CLAUDE_PLATFORM_NAMES; do
@@ -135,10 +139,7 @@ for platform in $CLAUDE_PLATFORM_NAMES; do
     continue
   fi
 
-  link_target="$platform_root/agents"
-  remove_existing "$link_target"
-  ln -s "$CANONICAL_CLAUDE_AGENT_ROOT" "$link_target"
-  printf 'link %s -> %s\n' "$link_target" "$CANONICAL_CLAUDE_AGENT_ROOT"
+  install_agents_into "$platform_root"
 done
 
 printf 'done: installed paired skills from %s\n' "$SCRIPT_DIR"

@@ -17,28 +17,16 @@ class PlanDevTasksContractTest(unittest.TestCase):
         cls.map_ref = read("references/project-map.md")
         cls.workspace = read("references/task-workspace.md")
         cls.packet = read("references/task-packet.md")
-        cls.runtime_path = ROOT / "references/runtime-adapters.md"
-        cls.runtime = (
-            cls.runtime_path.read_text(encoding="utf-8")
-            if cls.runtime_path.exists()
+        cls.claude_flow_path = ROOT / "references/claude-code-flow.md"
+        cls.claude_flow = (
+            cls.claude_flow_path.read_text(encoding="utf-8")
+            if cls.claude_flow_path.exists()
             else ""
         )
-        cls.codex_runtime_path = ROOT / "references/runtime-codex.md"
-        cls.codex_runtime = (
-            cls.codex_runtime_path.read_text(encoding="utf-8")
-            if cls.codex_runtime_path.exists()
-            else ""
-        )
-        cls.claude_runtime_path = ROOT / "references/runtime-claude-code.md"
-        cls.claude_runtime = (
-            cls.claude_runtime_path.read_text(encoding="utf-8")
-            if cls.claude_runtime_path.exists()
-            else ""
-        )
-        cls.hermes_runtime_path = ROOT / "references/runtime-hermes.md"
-        cls.hermes_runtime = (
-            cls.hermes_runtime_path.read_text(encoding="utf-8")
-            if cls.hermes_runtime_path.exists()
+        cls.hermes_flow_path = ROOT / "references/hermes-flow.md"
+        cls.hermes_flow = (
+            cls.hermes_flow_path.read_text(encoding="utf-8")
+            if cls.hermes_flow_path.exists()
             else ""
         )
         cls.hermes_transcript_path = (
@@ -119,56 +107,33 @@ class PlanDevTasksContractTest(unittest.TestCase):
             self.skill,
         )
 
-    def test_human_approval_platform_detection_is_explicit_and_fail_closed(self) -> None:
+    def test_platform_flow_selection_is_fail_closed(self) -> None:
+        selection = self.skill.split("## 5. 自动调度", 1)[1].split(
+            "### 统一生命周期", 1
+        )[0]
         self.assert_all(
-            self.approval,
+            selection,
             (
-                "当前工具注册表",
-                "运行时元数据",
+                "只加载",
+                "claude-code-flow.md",
+                "hermes-flow.md",
+                "ExitPlanMode",
+                "Agent",
+                "clarify",
+                "delegate_task",
                 "不得通过 `HOME` 目录",
-                "平台签名冲突",
-                "未知平台",
-                "unsupported platform",
+                "平台信号冲突",
                 "conflicting platform",
-                "fail closed",
+                "unsupported platform",
                 "不得使用共享通用审批",
-            ),
-        )
-
-    def test_codex_approval_uses_request_user_input_or_exact_default_text(self) -> None:
-        self.assert_all(
-            self.approval,
-            (
-                "Codex",
-                "`request_user_input`",
-                "当前可用",
-                "只能调用一次",
-                "单选",
-                "不得设置 `autoResolutionMs`",
-                "Default mode",
-                "Codex 专属精确文本选择",
-                "`批准并继续`",
-                "`修改计划`",
-                "`取消任务`",
-                "不得自动批准",
-            ),
-        )
-
-    def test_codex_default_exact_text_is_the_only_free_text_exception(self) -> None:
-        self.assert_all(
-            self.approval,
-            (
-                "第 3 节 Codex Default mode 的精确文本选择除外",
-                "`批准并继续` → `approved`",
-                "`修改计划` → `revise`",
-                "`取消任务` → `cancel`",
-                "其他任何自由文本",
+                "跨平台 fallback",
+                "fail closed",
             ),
         )
 
     def test_claude_code_approval_uses_plan_specific_tools(self) -> None:
         self.assert_all(
-            self.approval,
+            self.approval + self.claude_flow,
             (
                 "Claude Code",
                 "`ExitPlanMode`",
@@ -177,7 +142,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "非 Plan",
                 "非交互宿主",
                 "`blocked`",
-                "不得借用 Codex 或 Hermes",
+                "不得跨平台借用审批入口",
             ),
         )
         self.assertRegex(
@@ -187,14 +152,13 @@ class PlanDevTasksContractTest(unittest.TestCase):
 
     def test_hermes_approval_uses_clarify_not_command_approval(self) -> None:
         self.assert_all(
-            self.approval,
+            self.approval + self.hermes_flow,
             (
                 "Hermes",
                 "`clarify`",
                 "`clarify.respond`",
                 "`approval.request`",
                 "`approval.respond`",
-                "危险命令",
                 "未注册",
                 "`blocked`",
             ),
@@ -204,15 +168,21 @@ class PlanDevTasksContractTest(unittest.TestCase):
             r"不得[^。\n]*`approval\.request`[^。\n]*`approval\.respond`",
         )
 
-    def test_platform_approval_branches_forbid_cross_tool_fallback(self) -> None:
+    def test_platform_approval_branches_forbid_cross_platform_fallback(self) -> None:
         self.assert_all(
-            self.approval,
+            self.skill + self.approval,
             (
-                "Codex 分支不得调用 Claude Code 或 Hermes 工具",
-                "Claude Code 分支不得借用 Codex 或 Hermes 的审批入口",
-                "Hermes 分支不得调用 Codex 或 Claude Code 工具",
+                "不得跨平台借用审批入口",
+                "跨平台 fallback",
+                "不得使用共享通用审批",
             ),
         )
+        for foreign_tool in ("delegate_task", "clarify"):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.claude_flow)
+        for foreign_tool in ("ExitPlanMode", "AskUserQuestion", "Agent(dev-with-tdd)"):
+            with self.subTest(foreign_tool=foreign_tool):
+                self.assertNotIn(foreign_tool, self.hermes_flow)
 
     def test_approval_decision_is_authenticated_versioned_and_single_use(self) -> None:
         self.assert_all(
@@ -593,23 +563,22 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "Required skill: dev-with-tdd",
                 "Loaded skill: dev-with-tdd",
                 "Approval inherited: yes",
-                "确认版本一致",
-                "未确认时不得允许修改",
-                "不得接受 handoff",
+                "核对 Task ID、三个版本和执行环境证据一致",
+                "不匹配时不得写入",
+                "handshake",
             ),
         )
 
     def test_runtime_context_and_worker_record_are_platform_neutral(self) -> None:
-        self.assertTrue(self.runtime_path.is_file())
         self.assert_all(
-            self.packet + self.runtime,
+            self.packet + self.skill,
             (
                 "Runtime Context:",
-                "Platform: codex | claude-code | hermes",
-                "Adapter version:",
+                "Platform: claude-code | hermes",
+                "Platform flow: claude-code-flow.md | hermes-flow.md",
                 "Worker transport:",
                 "Dispatch mode: foreground | background-aggregate",
-                "Authorization mode: two-phase | atomic",
+                "Authorization mode: atomic",
                 "Completion mode:",
                 "Capability evidence:",
                 "Worker Record",
@@ -619,10 +588,12 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "不得传给 worker",
             ),
         )
+        self.assertNotIn("Adapter version:", self.packet + self.skill)
+        self.assertNotIn("two-phase", self.packet + self.skill)
 
-    def test_atomic_authorization_evidence_has_one_shared_shape(self) -> None:
+    def test_atomic_authorization_evidence_is_atomic_only(self) -> None:
         self.assert_all(
-            self.packet + self.runtime,
+            self.packet + self.skill,
             (
                 "Authorization Evidence:",
                 "Plan version:",
@@ -633,15 +604,13 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "Write permission: granted",
                 "Git runner verify",
                 "non-Git workspace boundary",
-                "two-phase",
-                "pending",
             ),
         )
+        self.assertNotIn("two-phase", self.packet + self.skill)
 
     def test_runtime_lifecycle_forces_immediate_review(self) -> None:
-        combined = self.skill + self.runtime
         self.assert_all(
-            combined,
+            self.skill,
             (
                 "approved",
                 "prepared",
@@ -662,19 +631,23 @@ class PlanDevTasksContractTest(unittest.TestCase):
             ),
         )
 
-    def test_shared_dispatch_selects_one_adapter_without_platform_tool_names(self) -> None:
-        dispatch = self.skill.split("## 5. 自动调度", 1)[1].split(
-            "## 6. 状态处理", 1
+    def test_shared_dispatch_selects_one_flow_and_fails_closed(self) -> None:
+        selection = self.skill.split("## 5. 自动调度", 1)[1].split(
+            "### 统一生命周期", 1
         )[0]
         self.assert_all(
-            self.skill + self.runtime,
+            selection,
             (
-                "Runtime Adapter",
                 "只加载",
+                "claude-code-flow.md",
+                "hermes-flow.md",
                 "平台信号冲突",
                 "fail closed",
             ),
         )
+        rules = self.skill.split("### 调度规则", 1)[1].split(
+            "## 6. 状态处理", 1
+        )[0]
         for platform_tool in (
             "spawn_agent",
             "Agent(dev-with-tdd)",
@@ -684,99 +657,19 @@ class PlanDevTasksContractTest(unittest.TestCase):
             "clarify",
         ):
             with self.subTest(platform_tool=platform_tool):
-                self.assertNotIn(platform_tool, dispatch)
+                self.assertNotIn(platform_tool, rules)
 
-    def test_codex_runtime_adapter_is_routed_and_capability_gated(self) -> None:
-        self.assertTrue(self.codex_runtime_path.is_file())
+    def test_claude_flow_is_loaded_and_atomic(self) -> None:
+        self.assertTrue(self.claude_flow_path.is_file())
         self.assertIn(
-            "[runtime-codex.md](runtime-codex.md)",
-            self.runtime,
+            "[references/claude-code-flow.md](references/claude-code-flow.md)",
+            self.skill,
         )
         self.assert_all(
-            self.codex_runtime,
-            (
-                "Platform: codex",
-                "Adapter version: 1",
-                "actually registered",
-                "Capability evidence",
-                "`spawn_agent`",
-                "`send_message`",
-                "`followup_task`",
-                "`wait_agent`",
-                "fail closed",
-                "主上下文",
-                "冒充 worker",
-            ),
-        )
-
-    def test_codex_runtime_adapter_requires_two_phase_authorization(self) -> None:
-        self.assert_all(
-            self.codex_runtime,
-            (
-                "Authorization mode: two-phase",
-                "只读",
-                "handshake",
-                "Plan version",
-                "Context version",
-                "Task version",
-                "Task ID",
-                "Worktree",
-                "Task branch",
-                "Expected HEAD",
-                "Base SHA",
-                "Authorization Evidence",
-                "同一 worker handle",
-            ),
-        )
-
-    def test_codex_runtime_adapter_auto_resumes_review_and_aggregates(self) -> None:
-        self.assert_all(
-            self.codex_runtime,
-            (
-                "Completion mode: wait_agent/mailbox final handoff",
-                "handoff-received",
-                "reviewing",
-                "立即",
-                "普通用户消息",
-                "不得正常结束",
-                "最多 3",
-                "background-aggregate",
-                "全部 handoff",
-            ),
-        )
-
-    def test_codex_runtime_adapter_visibility_and_tool_exclusivity(self) -> None:
-        self.assert_all(
-            self.codex_runtime,
-            (
-                "runtime agent tree",
-                "`agents/openai.yaml`",
-                "`.codex/agents`",
-                "不需要",
-            ),
-        )
-        for foreign_tool in (
-            "Agent(dev-with-tdd)",
-            "Skill(dev-with-tdd)",
-            "delegate_task",
-            "ExitPlanMode",
-            "AskUserQuestion",
-            "clarify",
-        ):
-            with self.subTest(foreign_tool=foreign_tool):
-                self.assertNotIn(foreign_tool, self.codex_runtime)
-
-    def test_claude_runtime_adapter_is_routed_and_atomic(self) -> None:
-        self.assertTrue(self.claude_runtime_path.is_file())
-        self.assertIn(
-            "[runtime-claude-code.md](runtime-claude-code.md)",
-            self.runtime,
-        )
-        self.assert_all(
-            self.claude_runtime,
+            self.claude_flow,
             (
                 "Platform: claude-code",
-                "Adapter version: 2",
+                "Platform flow: claude-code-flow.md",
                 "Worker transport: Agent(dev-with-tdd)",
                 "Authorization mode: atomic",
                 "`ExitPlanMode`",
@@ -792,40 +685,58 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "不等待第二次",
             ),
         )
-        self.assertNotIn("Skill(dev-with-tdd)", self.claude_runtime)
+        self.assertNotIn("Adapter version", self.claude_flow)
+        self.assertNotIn("Skill(dev-with-tdd)", self.claude_flow)
 
-    def test_shared_gate_only_applies_when_adapter_defines_it(self) -> None:
+    def test_gate_is_shared_across_platforms(self) -> None:
         self.assert_all(
             self.skill,
             (
-                "`Post-approval dispatch gate` 只在匹配 adapter 显式定义时执行",
-                "`Claude Code v2` 强制定义并执行",
-                "未定义额外 gate",
-                "既有 prepared 与 authorization 契约",
-                "不授予 Coordinator 业务写权限",
+                "gate 是所有 platform flow 共有的派发前 checkpoint",
+                "不变量由本节定义",
+                "各 flow 实现平台具体步骤",
+                "coordinator_direct_write",
+                "dispatch_mode_mismatch",
+                "禁止 busy polling",
+                "平台 flow 可以增加更严格的 gate 约束",
+                "不得放宽这些共享条件",
             ),
         )
+        for flow, label in (
+            (self.claude_flow, "claude-code"),
+            (self.hermes_flow, "hermes"),
+        ):
+            with self.subTest(flow=label):
+                self.assert_all(
+                    flow,
+                    (
+                        "Post-approval dispatch gate",
+                        "coordinator_direct_write",
+                        "dispatch_mode_mismatch",
+                        "保留现场",
+                        "禁止 busy polling",
+                    ),
+                )
 
     def test_claude_approval_plan_body_carries_gate_continuation(self) -> None:
         self.assert_all(
-            self.approval,
+            self.claude_flow,
             (
                 "每个传给 `ExitPlanMode` 的审批计划正文",
                 "Plan version:",
                 "Context version:",
                 "Task version:",
                 "post-approval gate continuation",
-                "approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running",
+                "approved -> gate（完成 verify） -> prepared -> Agent(dev-with-tdd) -> dispatched -> authorized -> running",
                 "批准事件只进入 `approved`",
                 "不得授予 Coordinator 业务写权限",
             ),
         )
 
-    def test_claude_runtime_gate_is_version_bound_and_ordered(self) -> None:
+    def test_claude_flow_gate_is_version_bound_and_ordered(self) -> None:
         self.assert_all(
-            self.claude_runtime,
+            self.claude_flow,
             (
-                "Adapter version: 2",
                 "Post-approval dispatch gate",
                 "Approval event:",
                 "Plan version:",
@@ -836,7 +747,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "Environment verification:",
                 "Dispatch mode:",
                 "Worker transport:",
-                "approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running",
+                "approved -> gate（完成 verify） -> prepared -> Agent(dev-with-tdd) -> dispatched -> authorized -> running",
                 "verify 必须先于 `prepared`",
                 "`authorized`",
                 "批准事件只进入 `approved`",
@@ -851,9 +762,9 @@ class PlanDevTasksContractTest(unittest.TestCase):
         self.assert_all(
             agent,
             (
-                "Claude Adapter v2",
+                "Claude Code 平台流程",
                 "Post-approval dispatch gate",
-                "approved → gate（完成 verify） → prepared → Agent(dev-with-tdd) → dispatched → authorized → running",
+                "approved -> gate（完成 verify） -> prepared -> Agent(dev-with-tdd) -> dispatched -> authorized -> running",
                 "runner `verify --require-clean`",
                 "Coordinator write authority: none",
                 "coordinator_direct_write",
@@ -868,7 +779,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
 
     def test_claude_gate_verifies_clean_state_and_preserves_direct_write(self) -> None:
         self.assert_all(
-            self.claude_runtime,
+            self.claude_flow,
             (
                 "runner `verify --require-clean`",
                 "workspace fingerprint",
@@ -884,7 +795,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
 
     def test_claude_dispatch_mode_is_enforced_without_busy_polling(self) -> None:
         self.assert_all(
-            self.claude_runtime,
+            self.claude_flow,
             (
                 "`L1`、`L2` 或单 worker",
                 "foreground",
@@ -950,13 +861,12 @@ class PlanDevTasksContractTest(unittest.TestCase):
             with self.subTest(forbidden_event=forbidden_event):
                 self.assertNotIn(forbidden_event, self.claude_dispatch_transcript)
 
-    def test_readme_documents_claude_post_approval_dispatch_gate(self) -> None:
+    def test_readme_documents_post_approval_dispatch_gate(self) -> None:
         readme = read("../../README.md")
         self.assert_all(
             readme,
             (
-                "Claude Code post-approval dispatch gate",
-                "Adapter v2",
+                "Post-approval dispatch gate",
                 "coordinator_direct_write",
                 "dispatch_mode_mismatch",
                 "foreground",
@@ -965,10 +875,11 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "禁止 busy polling",
             ),
         )
+        self.assertNotIn("Adapter v2", readme)
 
     def test_claude_serial_completion_immediately_enters_review(self) -> None:
         self.assert_all(
-            self.claude_runtime,
+            self.claude_flow,
             (
                 "Dispatch mode: foreground",
                 "Completion mode: foreground Agent result",
@@ -983,7 +894,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
 
     def test_claude_parallel_requires_preapproval_aggregation_evidence(self) -> None:
         self.assert_all(
-            self.claude_runtime,
+            self.claude_flow,
             (
                 "L3",
                 "background-aggregate",
@@ -997,7 +908,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
             ),
         )
 
-    def test_claude_adapter_excludes_other_runtime_transports(self) -> None:
+    def test_claude_flow_excludes_other_platform_transports(self) -> None:
         for foreign_tool in (
             "spawn_agent",
             "send_message",
@@ -1007,19 +918,19 @@ class PlanDevTasksContractTest(unittest.TestCase):
             "clarify",
         ):
             with self.subTest(foreign_tool=foreign_tool):
-                self.assertNotIn(foreign_tool, self.claude_runtime)
+                self.assertNotIn(foreign_tool, self.claude_flow)
 
-    def test_hermes_runtime_adapter_is_routed_and_atomic(self) -> None:
-        self.assertTrue(self.hermes_runtime_path.is_file())
+    def test_hermes_flow_is_loaded_and_atomic(self) -> None:
+        self.assertTrue(self.hermes_flow_path.is_file())
         self.assertIn(
-            "[runtime-hermes.md](runtime-hermes.md)",
-            self.runtime,
+            "[references/hermes-flow.md](references/hermes-flow.md)",
+            self.skill,
         )
         self.assert_all(
-            self.hermes_runtime,
+            self.hermes_flow,
             (
                 "Platform: hermes",
-                "Adapter version: 1",
+                "Platform flow: hermes-flow.md",
                 "Worker transport: delegate_task",
                 "Authorization mode: atomic",
                 "Coordinator 使用 `clarify`",
@@ -1035,10 +946,46 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "不等待第二次",
             ),
         )
+        self.assertNotIn("Adapter version", self.hermes_flow)
+
+    def test_hermes_flow_gate_is_version_bound_and_ordered(self) -> None:
+        self.assert_all(
+            self.hermes_flow,
+            (
+                "Post-approval dispatch gate",
+                "Approval event: clarify approved",
+                "Plan version:",
+                "Context version:",
+                "Task version:",
+                "Task ID:",
+                "Coordinator write authority: none",
+                "Environment verification:",
+                "Dispatch mode:",
+                "Worker transport: delegate_task",
+                "approved -> gate（完成 verify） -> prepared -> delegate_task -> dispatched -> authorized -> running",
+                "verify 必须先于 `prepared`",
+            ),
+        )
+
+    def test_hermes_gate_verifies_clean_state_and_preserves_direct_write(self) -> None:
+        self.assert_all(
+            self.hermes_flow,
+            (
+                "runner `verify --require-clean`",
+                "workspace fingerprint",
+                "coordinator_direct_write",
+                "保留现场",
+                "不得 rollback",
+                "不得 stash",
+                "不得 clean",
+                "不得 commit",
+                "不得标记为 `accepted`",
+            ),
+        )
 
     def test_hermes_completion_resumes_review_or_blocks_safely(self) -> None:
         self.assert_all(
-            self.hermes_runtime,
+            self.hermes_flow,
             (
                 "result reinjection",
                 "synchronous delegate result",
@@ -1056,7 +1003,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
 
     def test_hermes_delegate_capabilities_concurrency_and_visibility(self) -> None:
         self.assert_all(
-            self.hermes_runtime,
+            self.hermes_flow,
             (
                 "actually registered `delegate_task`",
                 "fail closed",
@@ -1071,7 +1018,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
             ),
         )
 
-    def test_hermes_adapter_excludes_other_runtime_transports(self) -> None:
+    def test_hermes_flow_excludes_other_platform_transports(self) -> None:
         for foreign_tool in (
             "spawn_agent",
             "send_message",
@@ -1084,7 +1031,7 @@ class PlanDevTasksContractTest(unittest.TestCase):
             "AskUserQuestion",
         ):
             with self.subTest(foreign_tool=foreign_tool):
-                self.assertNotIn(foreign_tool, self.hermes_runtime)
+                self.assertNotIn(foreign_tool, self.hermes_flow)
 
     def test_hermes_simulated_transcript_reaches_review_without_user_wakeup(
         self,
@@ -1154,11 +1101,13 @@ class PlanDevTasksContractTest(unittest.TestCase):
         self.assert_all(
             self.skill,
             (
-                "`~/.agents/platforms/claude-code/agents/`",
+                "直接成对复制到每个已存在平台根目录的 `skills/` 下",
+                "源仓库为唯一 canonical 来源",
+                "不保留单独的 canonical 副本",
+                "也不创建任何软链接",
                 "`.claude`、`.claudeD`、`.claudeP`",
-                "`agents/`",
-                "`.codex` 和 `.hermes`",
-                "不得创建 `agents/`",
+                "直接复制到每个已存在的 `.claude`、`.claudeD`、`.claudeP` 的 `agents/` 下",
+                "`.hermes` 不得创建 `agents/`",
                 "默认 agent",
                 "权限",
                 "全局配置",
@@ -1233,22 +1182,24 @@ class PlanDevTasksContractTest(unittest.TestCase):
         )
         self.assertNotIn("/private/tmp", self.skill + self.workspace)
 
-    def test_installation_uses_canonical_pair_and_platform_links(self) -> None:
+    def test_installation_uses_canonical_pair_and_direct_copies(self) -> None:
         self.assert_all(
             self.skill,
             (
                 "两套 skill 必须成对、同版本安装",
-                "`~/.agents/skills/plan-dev-tasks` 为 canonical",
-                "仅当平台根目录已经存在",
-                "`.claude`、`.claudeD`、`.claudeP`、`.codex`、`.hermes`",
-                "绝对软链接",
-                "不得创建缺失的平台根目录",
+                "直接成对复制到每个已存在平台根目录的 `skills/` 下",
+                "源仓库为唯一 canonical 来源",
+                "不保留单独的 canonical 副本",
+                "也不创建任何软链接",
+                "平台根目录不存在时输出 `skip`",
+                "`.claude`、`.claudeD`、`.claudeP`、`.hermes`",
                 "永久删除",
                 "先删除再",
             ),
         )
         self.assertNotIn("备份", self.skill)
         self.assertNotIn("独立同步副本", self.skill)
+        self.assertNotIn("绝对软链接", self.skill)
 
     def test_language_contract(self) -> None:
         self.assert_all(self.skill + self.packet + self.review, ("默认使用简体中文", "Language check: passed"))

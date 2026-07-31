@@ -51,11 +51,11 @@ Workspace Context:
   Relevant file fingerprints:
   Existing user changes:
 Runtime Context:
-  Platform: codex | claude-code | hermes
-  Adapter version:
+  Platform: claude-code | hermes
+  Platform flow:
   Worker transport:
   Dispatch mode: foreground | background-aggregate
-  Authorization mode: two-phase | atomic
+  Authorization mode: atomic
   Completion mode:
   Capability evidence:
 Authorization Evidence:
@@ -63,8 +63,8 @@ Authorization Evidence:
   Context version:
   Task version:
   Task ID:
-  Environment verification: pending | Git runner verify evidence | non-Git workspace boundary evidence
-  Write permission: pending | granted
+  Environment verification: Git runner verify evidence | non-Git workspace boundary evidence
+  Write permission: granted
 TDD classification: required | not required
 Red test plan:
 Green implementation plan:
@@ -95,9 +95,9 @@ Git Context:
 
 非 Git 项目不要求这些字段，也不得伪造 `Git Context`。Git 仓库字段缺失、`Git owner` 不是 Coordinator，或上下文不是 runner 实际结果时拒绝 packet。
 
-拒绝字段缺失、审批不是 `approved`、版本含糊、一个 packet 含多个 feature、`Required skill` 不匹配，或 `Runtime Context` 声明的授权模式和证据不一致的任务包。不得接收完整项目地图，不得接收完整 transcript、原始全量日志或无关代码。
+拒绝字段缺失、审批不是 `approved`、版本含糊、一个 packet 含多个 feature、`Required skill` 不匹配，或 `Runtime Context` 与授权证据不一致的任务包。不得接收完整项目地图，不得接收完整 transcript、原始全量日志或无关代码。
 
-两种授权模式都必须返回以下 handshake：
+必须返回以下 handshake：
 
 ```text
 Loaded skill: dev-with-tdd
@@ -108,15 +108,15 @@ Task ID:
 Approval inherited: yes
 ```
 
-`two-phase` 初始 `Authorization Evidence` 必须是 `pending`，并在返回 handshake 后等待 Coordinator 核对并通过同一 worker handle 续发授权；确认完成前不得修改任何文件。`atomic` 必须在派发前已经收到绑定 Plan version、Context version、Task version、Task ID、Coordinator Git verify 结果（非 Git 项目为 workspace 边界验证证据）、`Environment verification:` 和 `Write permission: granted` 的完整授权证据；核对成功后无需等待第二次 Coordinator 确认，可在同一次执行中继续。worker 不得自行补全、推断或伪造任一授权字段。版本、Task ID 或证据不一致时停止，不猜测正确值。
+`Authorization mode` 固定为 `atomic`。packet 必须在派发前已经收到绑定 Plan version、Context version、Task version、Task ID、Coordinator Git verify 结果（非 Git 项目为 workspace 边界验证证据）、`Environment verification` 和 `Write permission: granted` 的完整授权证据。核对成功后无需等待第二次 Coordinator 确认，可在同一次执行中继续。worker 不得自行补全、推断或伪造任一授权字段。版本、Task ID 或证据不一致时停止，不猜测正确值。
 
 Git 仓库写入前还必须：
 
 1. 核对当前工作目录与 packet 的 exact `Worktree` 一致，不得改变执行目录。
 2. 使用目的单一的只读检查核对 `git rev-parse --show-toplevel`、`git branch --show-current` 和 `git rev-parse HEAD`；结果必须分别匹配 `Worktree`、`Task branch` 和 `Expected HEAD`。
-3. 确认 Coordinator runner `verify` 已通过并有明确允许写入：`two-phase` 从 handshake 后的 Coordinator 消息取得，`atomic` 从派发前已绑定当前 packet 的授权证据取得。
+3. 确认 Coordinator runner `verify` 已通过并有明确允许写入：从派发前已绑定当前 packet 的授权证据取得。
 
-非 Git 项目的 `atomic` packet 必须提供 Coordinator 已核对执行目录、允许路径和 workspace 边界的证据；缺失时不得以 Git 证据代替。实际 worktree、branch 或 HEAD 与 `Git Context` 不符，runner `verify` 未通过，或尚未获得明确写入许可时，返回 `Status: context_gap` 或 `blocked`，不得修改任何文件。
+非 Git 项目的 packet 必须提供 Coordinator 已核对执行目录、允许路径和 workspace 边界的证据；缺失时不得以 Git 证据代替。实际 worktree、branch 或 HEAD 与 `Git Context` 不符，runner `verify` 未通过，或尚未获得明确写入许可时，返回 `Status: context_gap` 或 `blocked`，不得修改任何文件。
 
 ## 2. 受控发现与范围锁定
 
@@ -205,11 +205,10 @@ Language check: passed
 仅在用户明确授权 skill 维护、安装或同步时：
 
 - 两套 skill 必须成对、同版本安装。
-- `~/.agents/skills/dev-with-tdd` 为 canonical。
-- 仅当平台根目录已经存在时，才在 `.claude`、`.claudeD`、`.claudeP`、`.codex`、`.hermes` 的 `skills/` 下创建指向 canonical 的绝对软链接；不得创建缺失的平台根目录。
-- Claude Code 的命名 agent definitions canonical 安装到 `~/.agents/platforms/claude-code/agents/`；仅为已存在的 `.claude`、`.claudeD`、`.claudeP` 创建 `agents/` 绝对软链接。
-- `.codex` 和 `.hermes` 不得创建 `agents/`；它们使用各自的原生运行时 worker，不使用 Claude agent definitions。
+- 安装器把两套 skill 直接成对复制到每个已存在平台根目录的 `skills/` 下（`.claude`、`.claudeD`、`.claudeP`、`.hermes`）；源仓库为唯一 canonical 来源，不保留单独的 canonical 副本，也不创建任何软链接。
+- 仅当平台根目录已经存在时才安装；平台根目录不存在时输出 `skip`，不得代为创建。
+- Claude Code 的命名 agent definitions 直接复制到每个已存在的 `.claude`、`.claudeD`、`.claudeP` 的 `agents/` 下；`.hermes` 不得创建 `agents/`，它使用 Hermes delegation child，不使用 Claude agent definitions。
 - 安装器不得修改任何平台的默认 agent、权限或全局配置。Claude agent definitions 安装后需开启新会话或重启现有会话，才会出现在 `/agents`。
-- 安装器只处理计算出的精确目标：每次安装都对既有 canonical 和平台链接目标（包括正确软链接）执行永久删除，即先删除再全新安装或建链；不会创建新的 `.backup.*`，也不会扫描或删除邻接的历史 `.backup.*` 文件。
-- `HOME`、源 skill、源 agent definition 与既有平台 `skills/` 容器必须在首次删除前完成校验。
+- 安装器只处理计算出的精确目标：每次安装都对自身的 skill 目录、agent 文件与平台容器（包括旧版安装留下的软链接）执行永久删除，即先删除再全新复制；不会创建新的 `.backup.*`，也不会扫描或删除邻接的历史 `.backup.*` 文件。
+- `HOME`、源 skill、源 agent definition 与既有平台 `skills/`、`agents/` 容器必须在首次删除前完成校验；容器若是普通文件而非目录，必须 fail closed，不得静默覆盖。
 - 不处理其他位置、hooks、配置或其他 skill。
