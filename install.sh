@@ -34,6 +34,30 @@ remove_existing() {
   printf 'remove %s\n' "$target"
 }
 
+# Named Hermes profiles to install into, in addition to the default ~/.hermes
+# platform root. Validated at parse time so invalid names fail before any check
+# or mutation; names are restricted to [A-Za-z0-9._-] with a non-dot start,
+# which also guarantees word-splitting safety for the loops below.
+HERMES_PROFILES=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --hermes-profile)
+      if [ $# -lt 2 ] || [ -z "$2" ]; then
+        fail "--hermes-profile requires a non-empty profile name"
+      fi
+      if [[ ! "$2" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+        fail "invalid Hermes profile name: $2"
+      fi
+      HERMES_PROFILES="$HERMES_PROFILES $2"
+      shift 2
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
+
 if [ -z "${HOME:-}" ]; then
   fail "HOME must be a non-empty absolute directory"
 fi
@@ -89,6 +113,18 @@ for platform in $CLAUDE_PLATFORM_NAMES; do
   fi
 done
 
+# Validate every named Hermes profile container up front, before any deletion
+# or copy, so a blocking path in one target never causes partial mutation of
+# another.
+for profile in $HERMES_PROFILES; do
+  profile_root="$HOME_DIR/.hermes/profiles/$profile"
+  [ -d "$profile_root" ] || continue
+  profile_skills="$profile_root/skills"
+  if is_blocking_file "$profile_skills"; then
+    fail "profile skills path is not a directory: $profile_skills"
+  fi
+done
+
 install_skills_into() {
   local platform_root="$1"
   local platform_skills="$platform_root/skills"
@@ -140,6 +176,16 @@ for platform in $CLAUDE_PLATFORM_NAMES; do
   fi
 
   install_agents_into "$platform_root"
+done
+
+for profile in $HERMES_PROFILES; do
+  profile_root="$HOME_DIR/.hermes/profiles/$profile"
+  if [ ! -d "$profile_root" ]; then
+    printf 'skip %s (profile root missing)\n' "$profile_root"
+    continue
+  fi
+
+  install_skills_into "$profile_root"
 done
 
 printf 'done: installed paired skills from %s\n' "$SCRIPT_DIR"

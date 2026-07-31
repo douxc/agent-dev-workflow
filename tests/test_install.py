@@ -3,7 +3,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-from typing import Union
+from typing import Sequence, Union
 import unittest
 
 
@@ -16,12 +16,14 @@ CLAUDE_AGENT_NAMES = ("plan-dev-tasks", "dev-with-tdd")
 
 
 def run_install(
-    home: Union[Path, str], script: Path = SCRIPT
+    home: Union[Path, str],
+    script: Path = SCRIPT,
+    args: Sequence[str] = (),
 ) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["HOME"] = str(home)
     return subprocess.run(
-        [str(script)],
+        [str(script), *args],
         cwd=script.parent,
         env=env,
         capture_output=True,
@@ -46,8 +48,13 @@ class InstallScriptTest(unittest.TestCase):
             msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
         )
 
-    def assert_skill_installed(self, platform: str, skill: str) -> None:
-        installed = self.home / platform / "skills" / skill
+    def hermes_profile(self, name: str) -> Path:
+        return self.home / ".hermes" / "profiles" / name
+
+    def assert_skill_installed(
+        self, rel: Union[str, Path], skill: str
+    ) -> None:
+        installed = self.home / rel / "skills" / skill
         self.assertTrue(installed.is_dir(), msg=f"not a directory: {installed}")
         self.assertFalse(installed.is_symlink(), msg=f"is a symlink: {installed}")
         self.assertEqual(
@@ -343,6 +350,183 @@ class InstallScriptTest(unittest.TestCase):
             self.assertFalse(
                 (incomplete_home / ".claude" / "skills" / skill).exists()
             )
+
+    def test_installs_into_named_hermes_profile(self) -> None:
+        profile = self.hermes_profile("dev")
+        profile.mkdir(parents=True)
+
+        result = run_install(self.home, args=("--hermes-profile", "dev"))
+
+        self.assert_success(result)
+        for skill in SKILLS:
+            self.assert_skill_installed(
+                Path(".hermes") / "profiles" / "dev", skill
+            )
+        # Named profiles never receive agents/, same as the .hermes platform.
+        self.assertFalse((profile / "agents").exists())
+
+    def test_skips_missing_hermes_profile_without_creating_it(self) -> None:
+        result = run_install(self.home, args=("--hermes-profile", "dev"))
+
+        self.assert_success(result)
+        self.assertIn(
+            (
+                f"skip {self.real_home}/.hermes/profiles/dev "
+                "(profile root missing)"
+            ),
+            result.stdout,
+        )
+        self.assertFalse((self.home / ".hermes").exists())
+
+    def test_installs_into_multiple_hermes_profiles(self) -> None:
+        dev = self.hermes_profile("dev")
+        qa = self.hermes_profile("qa")
+        dev.mkdir(parents=True)
+        qa.mkdir(parents=True)
+        # dev/qa creation above already bootstrapped the .hermes default root.
+        (self.home / ".hermes").mkdir(exist_ok=True)
+
+        result = run_install(
+            self.home,
+            args=("--hermes-profile", "dev", "--hermes-profile", "qa"),
+        )
+
+        self.assert_success(result)
+        for skill in SKILLS:
+            self.assert_skill_installed(
+                Path(".hermes") / "profiles" / "dev", skill
+            )
+            self.assert_skill_installed(
+                Path(".hermes") / "profiles" / "qa", skill
+            )
+        # Additive: the default .hermes platform root is still installed.
+        self.assert_skill_installed(".hermes", SKILLS[0])
+        for profile in (dev, qa):
+            self.assertFalse((profile / "agents").exists())
+        self.assertFalse((self.home / ".hermes" / "agents").exists())
+
+    def test_recreates_profile_skills_on_reinstall(self) -> None:
+        profile = self.hermes_profile("dev")
+        profile.mkdir(parents=True)
+        args = ("--hermes-profile", "dev")
+
+        first = run_install(self.home, args=args)
+        self.assert_success(first)
+        second = run_install(self.home, args=args)
+
+        self.assert_success(second)
+        for skill in SKILLS:
+            real_dest = (
+                self.real_home
+                / ".hermes"
+                / "profiles"
+                / "dev"
+                / "skills"
+                / skill
+            )
+            self.assertIn(
+                f"remove {real_dest}\ninstall {real_dest}",
+                second.stdout,
+            )
+            self.assertNotIn(f"keep {real_dest}", second.stdout)
+            self.assertEqual(
+                list((profile / "skills").glob(f"{skill}.backup.*")),
+                [],
+            )
+        self.assert_skill_installed(
+            Path(".hermes") / "profiles" / "dev", SKILLS[0]
+        )
+
+    def test_rejects_invalid_hermes_profile_names_before_mutation(self) -> None:
+        # A pre-existing real copy in .claude must survive every rejected name.
+        preserved = self.home / ".claude" / "skills" / SKILLS[0]
+        preserved.mkdir(parents=True)
+        (preserved / "marker.txt").write_text(
+            "keep until validation passes", encoding="utf-8"
+        )
+
+        invalid_names = (
+            ".",
+            "..",
+            "../evil",
+            "/tmp/abs",
+            "a/b",
+            "has space",
+            "a\tb",
+            ".hidden",
+            "-dash",
+            "~tilde",
+        )
+        for name in invalid_names:
+            with self.subTest(name=name):
+                result = run_install(
+                    self.home, args=("--hermes-profile", name)
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid Hermes profile name", result.stderr)
+                self.assertEqual(
+                    (preserved / "marker.txt").read_text(encoding="utf-8"),
+                    "keep until validation passes",
+                )
+
+    def test_rejects_hermes_profile_flag_without_argument(self) -> None:
+        for args in (("--hermes-profile",), ("--hermes-profile", "")):
+            with self.subTest(args=args):
+                result = run_install(self.home, args=args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "--hermes-profile requires a non-empty profile name",
+                    result.stderr,
+                )
+
+    def test_rejects_unknown_arguments(self) -> None:
+        result = run_install(self.home, args=("--bogus",))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unknown argument: --bogus", result.stderr)
+
+    def test_rejects_blocking_file_at_profile_skills_before_mutating_others(
+        self,
+    ) -> None:
+        # A pre-existing real copy in .hermes must survive when a named
+        # profile's skills path is a blocking file.
+        preserved = self.home / ".hermes" / "skills" / SKILLS[0]
+        preserved.mkdir(parents=True)
+        (preserved / "marker.txt").write_text(
+            "keep until validation passes", encoding="utf-8"
+        )
+
+        profile = self.hermes_profile("dev")
+        profile.mkdir(parents=True)
+        (profile / "skills").write_text("not a directory", encoding="utf-8")
+
+        result = run_install(self.home, args=("--hermes-profile", "dev"))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("profile skills path is not a directory", result.stderr)
+        self.assertEqual(
+            (preserved / "marker.txt").read_text(encoding="utf-8"),
+            "keep until validation passes",
+        )
+        self.assertEqual(
+            list((self.home / ".hermes" / "skills").glob("*.backup.*")),
+            [],
+        )
+
+    def test_hermes_profiles_untouched_without_flag(self) -> None:
+        stale = (
+            self.hermes_profile("dev") / "skills" / SKILLS[0] / "SKILL.md"
+        )
+        stale.parent.mkdir(parents=True)
+        stale.write_text("stale profile copy", encoding="utf-8")
+
+        result = run_install(self.home)
+
+        self.assert_success(result)
+        self.assertEqual(
+            stale.read_text(encoding="utf-8"), "stale profile copy"
+        )
+        self.assertNotIn(".hermes/profiles", result.stdout)
 
 
 if __name__ == "__main__":

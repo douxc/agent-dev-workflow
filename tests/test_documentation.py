@@ -66,6 +66,7 @@ class DocumentationContractTest(unittest.TestCase):
             ".claude",
             ".claudeD",
             ".claudeP",
+            "--hermes-profile <name>",
             ".hermes/agents",
             "新会话",
             "永久删除",
