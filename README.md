@@ -102,7 +102,7 @@ Claude Code 的两个 custom agent definitions 另行 canonical 安装到：
 
 仅对已经存在的 `~/.claude`、`~/.claudeD` 和 `~/.claudeP`，安装器创建 `agents` 到 Claude canonical definitions 的绝对软链接。它不会创建 `.codex/agents` 或 `.hermes/agents`，也不会修改任何平台的默认 agent、权限或全局配置。Claude Code 安装新增 definitions 后，需要启动新会话或重启现有会话才能在 `/agents` 中看到它们。
 
-脚本可以重复运行。正确的现有软链接保持不变；既有 canonical 安装或冲突的链接目标会先移动到同级的唯一 `.backup.<时间戳>.<进程号>` 路径，再安装或建链，不会静默删除用户文件。空 `HOME`、`HOME=/`、不存在的 `HOME` 或缺少任一源 skill/agent definition 时，脚本会在安装前失败。
+脚本可以重复运行。每次运行时，安装器只处理上述计算出的精确目标：对既有 canonical 安装和平台链接目标（包括指向正确位置的软链接）执行永久删除，即先删除再全新安装或建链。此操作不可恢复；安装器不会创建新的 `.backup.*`，也不会扫描或删除邻接的历史 `.backup.*` 文件。`HOME`、源 skill、源 agent definition 与既有平台 `skills/` 容器都会在首次删除前完成校验。
 
 ## 仓库结构
 

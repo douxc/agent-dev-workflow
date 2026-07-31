@@ -16,31 +16,15 @@ path_exists() {
   [ -e "$1" ] || [ -L "$1" ]
 }
 
-next_backup_path() {
+remove_existing() {
   local target="$1"
-  local base="${target}.backup.$(date '+%Y%m%d%H%M%S').$$"
-  local candidate="$base"
-  local suffix=0
-
-  while path_exists "$candidate"; do
-    suffix=$((suffix + 1))
-    candidate="${base}.${suffix}"
-  done
-
-  printf '%s\n' "$candidate"
-}
-
-backup_existing() {
-  local target="$1"
-  local backup
 
   if ! path_exists "$target"; then
     return
   fi
 
-  backup="$(next_backup_path "$target")"
-  mv "$target" "$backup"
-  printf 'backup %s -> %s\n' "$target" "$backup"
+  rm -rf "$target"
+  printf 'remove %s\n' "$target"
 }
 
 if [ -z "${HOME:-}" ]; then
@@ -112,13 +96,13 @@ done
 mkdir -p "$CANONICAL_ROOT" "$(dirname "$CANONICAL_CLAUDE_AGENT_ROOT")"
 for skill in $SKILL_NAMES; do
   canonical_target="$CANONICAL_ROOT/$skill"
-  backup_existing "$canonical_target"
+  remove_existing "$canonical_target"
   mv "$staging_dir/skills/$skill" "$canonical_target"
   printf 'install %s\n' "$canonical_target"
 done
 rmdir "$staging_dir/skills"
 
-backup_existing "$CANONICAL_CLAUDE_AGENT_ROOT"
+remove_existing "$CANONICAL_CLAUDE_AGENT_ROOT"
 mv "$staging_dir/claude-agents" "$CANONICAL_CLAUDE_AGENT_ROOT"
 printf 'install %s\n' "$CANONICAL_CLAUDE_AGENT_ROOT"
 
@@ -139,12 +123,7 @@ for platform in $PLATFORM_NAMES; do
     canonical_target="$CANONICAL_ROOT/$skill"
     link_target="$platform_skills/$skill"
 
-    if [ -L "$link_target" ] && [ "$(readlink "$link_target")" = "$canonical_target" ]; then
-      printf 'keep %s\n' "$link_target"
-      continue
-    fi
-
-    backup_existing "$link_target"
+    remove_existing "$link_target"
     ln -s "$canonical_target" "$link_target"
     printf 'link %s -> %s\n' "$link_target" "$canonical_target"
   done
@@ -157,12 +136,7 @@ for platform in $CLAUDE_PLATFORM_NAMES; do
   fi
 
   link_target="$platform_root/agents"
-  if [ -L "$link_target" ] && [ "$(readlink "$link_target")" = "$CANONICAL_CLAUDE_AGENT_ROOT" ]; then
-    printf 'keep %s\n' "$link_target"
-    continue
-  fi
-
-  backup_existing "$link_target"
+  remove_existing "$link_target"
   ln -s "$CANONICAL_CLAUDE_AGENT_ROOT" "$link_target"
   printf 'link %s -> %s\n' "$link_target" "$CANONICAL_CLAUDE_AGENT_ROOT"
 done

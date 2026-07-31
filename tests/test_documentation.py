@@ -68,7 +68,11 @@ class DocumentationContractTest(unittest.TestCase):
             ".codex/agents",
             ".hermes/agents",
             "新会话",
-            "backup",
+            "永久删除",
+            "先删除再",
+            "不会创建新的 `.backup.*`",
+            "不会扫描或删除邻接的历史",
+            "首次删除前完成校验",
             "重复运行",
         )
 

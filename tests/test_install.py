@@ -119,13 +119,22 @@ class InstallScriptTest(unittest.TestCase):
             self.assertFalse((self.home / platform).exists())
             self.assertIn(f"skip {self.real_home / platform}", result.stdout)
 
-    def test_backs_up_canonical_and_platform_collisions(self) -> None:
+    def test_replaces_canonical_and_platform_collisions_without_backups(
+        self,
+    ) -> None:
         canonical_root = self.home / ".agents" / "skills"
         canonical_root.mkdir(parents=True)
+        historical_backups = []
         for skill in SKILLS:
             target = canonical_root / skill
             target.mkdir()
             (target / "old.txt").write_text(f"old {skill}", encoding="utf-8")
+            historical_backup = canonical_root / f"{skill}.backup.historical"
+            historical_backup.mkdir()
+            (historical_backup / "keep.txt").write_text(
+                f"historical {skill}", encoding="utf-8"
+            )
+            historical_backups.append(historical_backup)
 
         platform_root = self.home / ".claude"
         platform_skills = platform_root / "skills"
@@ -135,35 +144,45 @@ class InstallScriptTest(unittest.TestCase):
         dir_collision = platform_skills / SKILLS[1]
         dir_collision.mkdir()
         (dir_collision / "user.txt").write_text("user directory", encoding="utf-8")
+        historical_platform_backup = (
+            platform_skills / f"{SKILLS[0]}.backup.historical"
+        )
+        historical_platform_backup.write_text(
+            "historical platform backup", encoding="utf-8"
+        )
 
         result = run_install(self.home)
 
         self.assert_success(result)
         self.assert_canonical_pair()
-        for skill in SKILLS:
+        for skill, historical_backup in zip(SKILLS, historical_backups):
             backups = list(canonical_root.glob(f"{skill}.backup.*"))
-            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups, [historical_backup])
             self.assertEqual(
-                (backups[0] / "old.txt").read_text(encoding="utf-8"),
-                f"old {skill}",
+                (historical_backup / "keep.txt").read_text(encoding="utf-8"),
+                f"historical {skill}",
             )
 
         file_backups = list(platform_skills.glob(f"{SKILLS[0]}.backup.*"))
         dir_backups = list(platform_skills.glob(f"{SKILLS[1]}.backup.*"))
-        self.assertEqual(len(file_backups), 1)
-        self.assertEqual(file_backups[0].read_text(encoding="utf-8"), "user file")
-        self.assertEqual(len(dir_backups), 1)
+        self.assertEqual(file_backups, [historical_platform_backup])
         self.assertEqual(
-            (dir_backups[0] / "user.txt").read_text(encoding="utf-8"),
-            "user directory",
+            historical_platform_backup.read_text(encoding="utf-8"),
+            "historical platform backup",
         )
+        self.assertEqual(dir_backups, [])
 
-    def test_backs_up_claude_agent_canonical_and_link_collisions(self) -> None:
+    def test_replaces_claude_agent_collisions_without_backups(self) -> None:
         canonical = (
             self.home / ".agents" / "platforms" / "claude-code" / "agents"
         )
         canonical.mkdir(parents=True)
         (canonical / "old.txt").write_text("old agents", encoding="utf-8")
+        historical_canonical_backup = canonical.parent / "agents.backup.historical"
+        historical_canonical_backup.mkdir()
+        (historical_canonical_backup / "keep.txt").write_text(
+            "historical agents", encoding="utf-8"
+        )
 
         file_root = self.home / ".claude"
         file_root.mkdir()
@@ -184,16 +203,12 @@ class InstallScriptTest(unittest.TestCase):
         self.assert_success(result)
         self.assert_canonical_claude_agents()
         canonical_backups = list(canonical.parent.glob("agents.backup.*"))
-        self.assertEqual(len(canonical_backups), 1)
+        self.assertEqual(canonical_backups, [historical_canonical_backup])
         self.assertEqual(
-            (canonical_backups[0] / "old.txt").read_text(encoding="utf-8"),
-            "old agents",
+            (historical_canonical_backup / "keep.txt").read_text(encoding="utf-8"),
+            "historical agents",
         )
-        for platform, old_value in (
-            (".claude", "user file"),
-            (".claudeD", "user directory"),
-            (".claudeP", str(self.home / "wrong-agents")),
-        ):
+        for platform in CLAUDE_PLATFORMS:
             root = self.home / platform
             link = root / "agents"
             self.assertTrue(link.is_symlink())
@@ -207,41 +222,41 @@ class InstallScriptTest(unittest.TestCase):
                     / "agents"
                 ),
             )
-            backups = list(root.glob("agents.backup.*"))
-            self.assertEqual(len(backups), 1)
-            if platform == ".claude":
-                self.assertEqual(backups[0].read_text(encoding="utf-8"), old_value)
-            elif platform == ".claudeD":
-                self.assertEqual(
-                    (backups[0] / "user.txt").read_text(encoding="utf-8"),
-                    old_value,
-                )
-            else:
-                self.assertTrue(backups[0].is_symlink())
-                self.assertEqual(os.readlink(backups[0]), old_value)
+            self.assertEqual(list(root.glob("agents.backup.*")), [])
 
-    def test_keeps_correct_links_while_reinstalling_canonical_pair(self) -> None:
+    def test_recreates_correct_skill_links_on_reinstall(self) -> None:
         platform = self.home / ".codex"
         platform.mkdir()
         first = run_install(self.home)
         self.assert_success(first)
         links = [platform / "skills" / skill for skill in SKILLS]
-        first_inodes = [link.lstat().st_ino for link in links]
 
         second = run_install(self.home)
 
         self.assert_success(second)
         self.assert_canonical_pair()
-        self.assertEqual([link.lstat().st_ino for link in links], first_inodes)
         for skill, link in zip(SKILLS, links):
             real_link = self.real_home / ".codex" / "skills" / skill
-            self.assertIn(f"keep {real_link}", second.stdout)
-            backups = list(
-                (self.home / ".agents" / "skills").glob(f"{skill}.backup.*")
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(
+                os.readlink(link),
+                str(self.real_home / ".agents" / "skills" / skill),
             )
-            self.assertEqual(len(backups), 1)
+            self.assertIn(
+                f"remove {real_link}\nlink {real_link} ->",
+                second.stdout,
+            )
+            self.assertNotIn(f"keep {real_link}", second.stdout)
+            self.assertEqual(
+                list(
+                    (self.home / ".agents" / "skills").glob(
+                        f"{skill}.backup.*"
+                    )
+                ),
+                [],
+            )
 
-    def test_keeps_correct_claude_agents_link_while_refreshing_definitions(
+    def test_recreates_correct_claude_agents_link_while_refreshing_definitions(
         self,
     ) -> None:
         platform = self.home / ".claude"
@@ -249,21 +264,40 @@ class InstallScriptTest(unittest.TestCase):
         first = run_install(self.home)
         self.assert_success(first)
         link = platform / "agents"
-        first_inode = link.lstat().st_ino
 
         second = run_install(self.home)
 
         self.assert_success(second)
         self.assert_canonical_claude_agents()
-        self.assertEqual(link.lstat().st_ino, first_inode)
+        real_link = self.real_home / ".claude" / "agents"
         self.assertIn(
-            f"keep {self.real_home / '.claude' / 'agents'}",
+            f"remove {real_link}\nlink {real_link} ->",
             second.stdout,
         )
+        self.assertNotIn(f"keep {real_link}", second.stdout)
         canonical = (
             self.home / ".agents" / "platforms" / "claude-code" / "agents"
         )
-        self.assertEqual(len(list(canonical.parent.glob("agents.backup.*"))), 1)
+        self.assertEqual(list(canonical.parent.glob("agents.backup.*")), [])
+
+    def test_rejects_invalid_platform_skills_before_replacing_targets(self) -> None:
+        canonical = self.home / ".agents" / "skills" / SKILLS[0]
+        canonical.mkdir(parents=True)
+        marker = canonical / "old.txt"
+        marker.write_text("keep until validation passes", encoding="utf-8")
+        platform = self.home / ".claude"
+        platform.mkdir()
+        (platform / "skills").write_text("not a directory", encoding="utf-8")
+
+        result = run_install(self.home)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("platform skills path is not a directory", result.stderr)
+        self.assertEqual(
+            marker.read_text(encoding="utf-8"),
+            "keep until validation passes",
+        )
+        self.assertEqual(list(canonical.parent.glob(f"{SKILLS[0]}.backup.*")), [])
 
     def test_codex_and_hermes_never_receive_agent_directories(self) -> None:
         for platform in (".codex", ".hermes"):

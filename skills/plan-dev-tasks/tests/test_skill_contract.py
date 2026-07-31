@@ -1243,9 +1243,11 @@ class PlanDevTasksContractTest(unittest.TestCase):
                 "`.claude`、`.claudeD`、`.claudeP`、`.codex`、`.hermes`",
                 "绝对软链接",
                 "不得创建缺失的平台根目录",
-                "备份",
+                "永久删除",
+                "先删除再",
             ),
         )
+        self.assertNotIn("备份", self.skill)
         self.assertNotIn("独立同步副本", self.skill)
 
     def test_language_contract(self) -> None:
