@@ -51,16 +51,16 @@ gate 严格按下列顺序执行：
 1. 认证 approval event，并核对 `Plan version`、`Context version`、`Task version`、`Task ID`、批准的 `Dispatch mode` 和 `Worker transport`。
 2. 确认 `Coordinator write authority: none`。批准不允许 Coordinator 直接编辑业务文件、运行会产生业务 diff 的实现工具或伪造 delegate handoff。
 3. 在任何实现工具前，Git 项目必须立即通过 bundled runner `verify --require-clean` 核对 exact Worktree、Task branch、Expected HEAD、Base SHA 和 clean 状态；非 Git 项目必须重新核对批准时的 workspace fingerprint、允许路径与边界。
-4. 若验证发现批准后新增业务 diff，立即转为 `blocked`，原因固定为 `coordinator_direct_write`，保留现场。不得 rollback、不得 stash、不得 clean、不得 commit，也不得标记为 `accepted`。
-5. verify 必须先于 `prepared`。验证通过后才进入共享生命周期的 `prepared`、创建 Worker Record，并使用批准的 worker transport 和 dispatch mode 派发。实际 dispatch mode 与 gate record 不一致时立即转为 `blocked`，原因固定为 `dispatch_mode_mismatch`；保留现场且不得进入 `dispatched`、`authorized` 或 `running`。
+4. 若验证发现批准后新增业务 diff，立即转为 `blocked`，原因固定为 `coordinator_direct_write`，保留现场，并用 runner `state --to blocked` 记录该原因。不得 rollback、不得 stash、不得 clean、不得 commit，也不得标记为 `accepted`。
+5. verify 必须先于 `prepared`。验证通过后先用 runner `state --to prepared` 记录 gate 证据，再进入共享生命周期的 `prepared`、创建 Worker Record，并使用批准的 worker transport 和 dispatch mode 派发。实际 dispatch mode 与 gate record 不一致时立即转为 `blocked`，原因固定为 `dispatch_mode_mismatch` 并用 runner `state --to blocked` 记录；保留现场且不得进入 `dispatched`、`authorized` 或 `running`。状态文件平台无关（见 [state-file.md](state-file.md)），Hermes 同样使用 runner `state` 记录每次生命周期迁移。
 
 ## 原子授权与派发
 
 Hermes 使用 `Authorization mode: atomic`，因为 child 不得调用 `clarify`，也不能把审批责任转交给临时运行实例。
 
-1. Coordinator 从已通过的 gate record 取得 `Plan version`、`Context version`、`Task version`、`Task ID` 与最新环境验证证据，并迁移为 `prepared`。
+1. Coordinator 从已通过的 gate record 取得 `Plan version`、`Context version`、`Task version`、`Task ID` 与最新环境验证证据，并经 runner `state --to prepared` 记录后迁移为 `prepared`。
 2. Coordinator 在初始 Execution Packet 中直接写入完整 `Authorization Evidence`，包含可复核的 `Environment verification` 和 `Write permission: granted`。
-3. Coordinator 调用原生 delegation transport，派发一个只服务该 Task ID 的 child，并把返回的 child identity 写入 Worker Record。
+3. Coordinator 调用原生 delegation transport，派发一个只服务该 Task ID 的 child，先把返回的 child identity 经 runner `state --to dispatched --worker handle=...,transport=...` 记录，再写入 Worker Record。
 4. child 验证 packet 和完整授权证据，产生版本化 handshake 后直接进入实现，不等待第二次 Coordinator 消息或普通用户输入。
 
 初始 packet 的授权证据缺失、版本不一致、环境证据过期或写入许可未明确 granted 时不得派发；状态转为 `context-gap` 或 `blocked`。原子授权不减少校验，只把已经完成的批准和环境验证绑定到首次派发。child 不得调用 `clarify`，也不得自行补全、更新或重新申请授权。
@@ -75,9 +75,9 @@ Hermes 支持两种经过能力验证的完成路径：
 无论使用哪条路径，Coordinator 收到结果后都必须：
 
 1. 核对 child identity、Task ID、`Plan version`、`Context version` 和 `Task version`；
-2. 将可认证的结构化 handoff 写入 Worker Record，并迁移为 `handoff-received`；
-3. 立即从 `handoff-received` 进入 `reviewing`，独立检查实际 diff 与可复现验证；
-4. 根据审查结果进入 `accepted`、`rework`、`context-gap` 或 `blocked`。
+2. 将可认证的结构化 handoff 写入 Worker Record，并先用 runner `state --to handoff-received` 记录，再迁移为 `handoff-received`；
+3. 先用 runner `state --to reviewing` 记录，再立即从 `handoff-received` 进入 `reviewing`，独立检查实际 diff 与可复现验证；
+4. 根据审查结果进入 `accepted`、`rework`、`context-gap` 或 `blocked`；每个迁移同样先用 runner `state` 记录。
 
 Coordinator 不得等待普通用户消息来唤醒审查。结果为空、来源不确定、child identity 丢失、session interruption、process restart 或 child/result 状态不确定时，必须转为 `blocked` 并保留现场、Worker Record 和已有证据；不得猜测成功、重复派发或清理 worktree。需要 rework 时必须通过原 child identity 续发同一 Task ID 的窄反馈；child identity 已失效时转为 `blocked`。
 
@@ -88,6 +88,19 @@ Hermes 单次 batch 最多 3 个 child。只有计划审批前已经证明 batch
 Coordinator 为每个 child 维护独立 Worker Record，认证并聚合全部结果；每个 handoff 到达后立即审查对应 packet，同时继续跟踪其他 child。只有全部结果均已认证并完成相应审查后，聚合阶段才可结束。聚合能力未证明时必须在计划阶段选择 `foreground`，不得在批准后静默改变 dispatch 或 Git mode。
 
 禁止 busy polling。不得用 shell 查询、目录列表或紧密循环轮询 delegate 状态，也不得把固定间隔的重复检查包装成等待机制；宿主 result reinjection 或 synchronous delegate result 不可用时必须 `blocked`。
+
+## 平台强制能力等级（文档性）
+
+Claude Code 通过可选 `--harden-claude` 获得机械强制层（见 [claude-code-flow.md](claude-code-flow.md) 强制层章节）。Hermes 当前**没有等价的细粒度强制机制**，本平台仅文档化其可用能力，不承诺 hooks 等价物：
+
+| 能力 | Hermes 现状 | 说明 |
+|---|---|---|
+| 无条件命令拦截 | 已有 `approvals.deny` glob 规则（`~/.hermes/config.yaml`，生效于 `--yolo` 之前） | 可拦截如 `git push --force*`、危险 curl 等整条命令模式，不能按 packet 动态放行 |
+| 路径作用域 | 已有 `agent.workdir` / `terminal.cwd` | 工具访问被限制在目录内，无法表达 per-packet 的 `Allowed write paths` |
+| 工具调用前钩子 | plugins `pre_tool_call`（REJECT 语义为提案，issue #9388） | 实现后可拒绝工具调用 |
+| 声明式写路径白名单 | `tools.*.allowed_write_paths` 为提案（issue #9389，未实现） | 落地后才能表达 packet 级写边界 |
+
+结论：Hermes 当前只能提供**粗粒度强制**（workdir 作用域 + deny 规则），per-packet 路径粒度与状态驱动强制不可用。因此 Hermes 平台上的 `coordinator_direct_write` / `worker_write_outside_packet` / `dispatch_mode_mismatch` 等违规仍依赖协议层检测（gate 的 `verify --require-clean` 与 runner 显式路径 `commit`），与强化前的 Claude Code 一致；state.json（[state-file.md](state-file.md)）平台无关，Hermes 同样记录并在上述机制落地后直接受益。
 
 ## 可见性与安装边界
 

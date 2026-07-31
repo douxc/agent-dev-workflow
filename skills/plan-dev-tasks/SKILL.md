@@ -12,7 +12,7 @@ description: 作为唯一面向用户和隐式触发的开发入口及 Coordinat
 - 面向用户及 agent 间的自然语言默认使用简体中文；英文仅用于代码、标识符、API 字段、路径、命令、配置值、精确错误和必要技术术语。
 - 代码、测试和仓库指令是事实来源；`project-map.md` 只用于快速定位。
 - `SKILL_ROOT` 是包含当前已加载 `SKILL.md` 的目录，与当前工作目录和 `${PROJECT_ROOT}` 无关。本 skill 中所有 `references/` 与 `scripts/` 资源都相对 `SKILL_ROOT` 解析；链接形式的 `references/...` 等价于 `${SKILL_ROOT}/references/...`，runner 的唯一执行路径是 `${SKILL_ROOT}/scripts/git-workflow.sh`。
-- 读取 [references/project-map.md](references/project-map.md)、[references/task-packet.md](references/task-packet.md)、[references/task-workspace.md](references/task-workspace.md) 与 [references/git-workflow.md](references/git-workflow.md)；请求审批前读取 [references/human-approval.md](references/human-approval.md)；按 capability 选定平台后只加载匹配的 platform flow（[references/claude-code-flow.md](references/claude-code-flow.md) 或 [references/hermes-flow.md](references/hermes-flow.md)）；最终验收时读取 [references/review-checklist.md](references/review-checklist.md)。
+- 读取 [references/project-map.md](references/project-map.md)、[references/task-packet.md](references/task-packet.md)、[references/task-workspace.md](references/task-workspace.md)、[references/state-file.md](references/state-file.md) 与 [references/git-workflow.md](references/git-workflow.md)；请求审批前读取 [references/human-approval.md](references/human-approval.md)；按 capability 选定平台后只加载匹配的 platform flow（[references/claude-code-flow.md](references/claude-code-flow.md) 或 [references/hermes-flow.md](references/hermes-flow.md)）；最终验收时读取 [references/review-checklist.md](references/review-checklist.md)。
 - 除 [references/git-workflow.md](references/git-workflow.md) 规定的任务开始前 `inspect`/`sync` 基线同步这一唯一受控例外外，计划批准前只做只读检查；branch、worktree、commit、push 等副作用在批准前仍禁止。需要保存计划或日志时，按 task workspace 契约创建项目内临时目录。
 - Git 仓库的状态性操作严格使用 `${SKILL_ROOT}/scripts/git-workflow.sh`；必须先验证这个精确的 bundled resource。若宿主不暴露或不允许解析已加载 skill 的 resource base，返回 `context_gap` 或 `blocked` 并明确缺失 `skill resource base`；此时不得宣称 bundled runner 缺失，也不得回退到直接 Git 命令。
 - 不得探测 `${PROJECT_ROOT}/scripts/git-workflow.sh`，不得要求业务仓库提供它，不得复制 runner 到业务仓库，也不得在业务仓库创建 runner；业务仓库不拥有 runner。
@@ -131,6 +131,8 @@ approved
 
 `rework` 恢复同一 Task ID 的 worker 并重新进入适用的授权/运行状态；`context-gap` 和 `blocked` 保留现场并按 §6 处理。
 
+每次生命周期迁移必须先经 bundled runner `state` 记录成功，再执行对应动作；`${PROJECT_ROOT}/.tmp/<task-id>/state.json` 是生命周期状态与三个版本号的单一事实来源（见 [references/state-file.md](references/state-file.md)），Coordinator 不得直接编辑该文件。
+
 ### Post-approval dispatch gate
 
 gate 是所有 platform flow 共有的派发前 checkpoint，不变量由本节定义，各 flow 实现平台具体步骤。任何实现工具运行前都必须执行 gate，且 gate 记录必须与当前批准和 packet 精确绑定：
@@ -149,6 +151,8 @@ Post-approval dispatch gate:
 ```
 
 gate 必须重新验证执行环境与批准的 dispatch mode，不能复用批准前的陈旧结果。若发现批准后出现 Coordinator 业务写入，转为 `blocked`，原因固定为 `coordinator_direct_write`，保留现场；不得 rollback、不得 stash、不得 clean、不得 commit，也不得标记为 `accepted`。若实际派发模式与已批准的 `Dispatch mode` 不一致，转为 `blocked`，原因固定为 `dispatch_mode_mismatch`，不得进入 `running`。后台完成禁止 busy polling：不得用 shell 查询、目录列表或紧密循环轮询后台状态。平台 flow 可以增加更严格的 gate 约束，不得放宽这些共享条件。
+
+gate 通过后必须用 runner `state --to prepared` 记录 gate 证据（verify 结果 head、三个版本、dispatch mode、worker transport）；发现 `coordinator_direct_write` 或 `dispatch_mode_mismatch` 时必须用 runner `state --to blocked` 记录原因并保留现场。派发前自检：state.json 的 `lifecycle = prepared` 且 `gate.status = passed`。
 
 ### 原子授权
 
@@ -174,6 +178,7 @@ Coordinator 为每个 packet 维护不得传给 worker 的 Coordinator-only `Wor
 - 并行依赖只接受 packet 的 `Shared dependency paths`；Coordinator 校验目标存在、Git ignored、manifest/lockfile fingerprint 与 Base SHA 一致且 packet 禁止修改依赖定义后，才传 `--share`。否则改为串行或使用已批准的独立安装；不得共享构建输出、数据库或运行时状态。
 - 每次 worker 写入前，Coordinator 必须用 packet 的 exact Git Context 调用 runner `verify`，并确认返回的 `head` 与 `Expected HEAD` 精确匹配；失败时不得允许写入。
 - worker 不得执行 branch、worktree、commit、push、merge、rebase 或 cleanup；`Git owner: Coordinator`。
+- 每次派发、handshake、handoff 与 commit 迁移前，先用 runner `state` 记录对应生命周期迁移，再执行动作。
 - `L1` 和 `L2` 串行派发。
 - `L3` 根据批准的依赖动态派发：只选择依赖已经完成且与运行任务写入路径不冲突的 ready nodes。
 - 同时最多 3 个 worker；实际数量取 ready nodes、可用 slots 与 3 的最小值。
@@ -228,12 +233,12 @@ Coordinator 是 `project-map.md` 的唯一写入者。依据最终实际 diff �
 1. 确认所有 worker 完成，代码已持久化。
 2. 完成前再次检查 Git drift 和 exact context；失败或 drift 保留现场。
 3. 运行适用的聚焦测试和扩大验证。
-4. Coordinator 独立 review 实际 diff，accepted packet 已由 runner 形成 commit。
+4. Coordinator 独立 review 实际 diff，accepted packet 已由 runner 形成 commit；每个 accepted packet commit 成功后，用 runner `state --to committed` 记录。
 5. 重新读取地图，校验 fingerprint，只按受影响 key 合并更新。
 6. 验证地图结构、证据、排序和未受影响条目；若变化，形成只含 `project-map.md` 的 Coordinator metadata commit。
 7. 再次 `verify` 并按批准决定是否只 push task branch，确认代码与地图均已持久化并提取紧凑证据。
 8. 并行模式在 accepted commit 持久化且 worktree clean 后调用 `cleanup-parallel`，先移除 worktree；串行模式不调用 worktree cleanup。
-9. 校验 task ownership 后清理当前 task workspace。
+9. 校验 task ownership 后，先用 runner `state --to finalized` 记录结束，再清理当前 task workspace。
 10. 验证任务目录已不存在并返回结果。
 
 失败、`context_gap`、blocked 或地图冲突时保留当前任务目录；用户明确取消或放弃时才清理当前任务资源。不得删除其他任务目录。
@@ -254,7 +259,7 @@ Coordinator 是 `project-map.md` 的唯一写入者。依据最终实际 diff �
 - 安装器把两套 skill 直接成对复制到每个已存在平台根目录的 `skills/` 下（`.claude`、`.claudeD`、`.claudeP`、`.hermes`）；源仓库为唯一 canonical 来源，不保留单独的 canonical 副本，也不创建任何软链接。
 - 仅当平台根目录已经存在时才安装；平台根目录不存在时输出 `skip`，不得代为创建。
 - Claude Code 的命名 agent definitions 直接复制到每个已存在的 `.claude`、`.claudeD`、`.claudeP` 的 `agents/` 下；`.hermes` 不得创建 `agents/`，它使用 Hermes delegation child，不使用 Claude agent definitions。
-- 安装器不得修改任何平台的默认 agent、权限或全局配置。Claude agent definitions 安装后需开启新会话或重启现有会话，才会出现在 `/agents`。
+- 安装器不得修改任何平台的默认 agent、权限或全局配置。Claude agent definitions 安装后需开启新会话或重启现有会话，才会出现在 `/agents`。默认安装不触碰任何配置；仅当显式传入 `--harden-claude` 时，安装器才向已存在的 Claude 平台根目录的 `settings.json` 合并本 bundle 的 hooks 条目（保留其他键、可重复执行，`--unharden-claude` 精确移除），且不触碰 Hermes 与其他平台配置。
 - 安装器只处理计算出的精确目标：每次安装都对自身的 skill 目录、agent 文件与平台容器（包括旧版安装留下的软链接）执行永久删除，即先删除再全新复制；不会创建新的 `.backup.*`，也不会扫描或删除邻接的历史 `.backup.*` 文件。
 - `HOME`、源 skill、源 agent definition 与既有平台 `skills/`、`agents/` 容器必须在首次删除前完成校验；容器若是普通文件而非目录，必须 fail closed，不得静默覆盖。
-- 不处理其他位置、hooks、配置或其他 skill。
+- 默认不处理其他位置、hooks、配置或其他 skill；`--harden-claude` 是唯一的显式配置变更例外，且只触及本 bundle 的 hook 条目。

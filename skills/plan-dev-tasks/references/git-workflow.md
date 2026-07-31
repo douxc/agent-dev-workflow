@@ -14,7 +14,7 @@ prompt 负责决策和结构化参数；状态性 Git 或系统操作必须调�
 
 不得探测 `${PROJECT_ROOT}/scripts/git-workflow.sh`，不得要求业务仓库提供该文件，不得复制 runner 到业务仓库，也不得在业务仓库创建 runner；业务仓库不拥有 runner。
 
-runner 支持 `inspect`、`sync`、`prepare-serial`、`prepare-parallel`、`verify`、`commit`、`push`、`cleanup-parallel`。branch、worktree、依赖软链接、commit、push 与 worktree cleanup 不得由 prompt 临时拼接命令完成，即不得临时拼接等价状态操作。所需状态性子命令缺失或失败时必须 fail closed，保留现场并报告 `blocked`、`context_gap` 或重新规划。
+runner 支持 `inspect`、`sync`、`prepare-serial`、`prepare-parallel`、`verify`、`commit`、`push`、`cleanup-parallel`、`state`。branch、worktree、依赖软链接、commit、push 与 worktree cleanup 不得由 prompt 临时拼接命令完成，即不得临时拼接等价状态操作。所需状态性子命令缺失或失败时必须 fail closed，保留现场并报告 `blocked`、`context_gap` 或重新规划。
 
 允许直接执行单个只读发现命令，例如确认远端列表或读取 remote ref；每条命令必须目的单一，不得借此组合状态性操作。human approval 使用平台原生交互，文件内容编辑使用宿主安全编辑能力，两者都不由 shell 模拟。
 
@@ -102,3 +102,7 @@ Coordinator 按 project-map 契约完成地图决策后，如果地图实际变�
 并行 worktree 仅在对应 accepted commit 已持久化、worktree clean、验证与证据提取完成后调用 `cleanup-parallel`。先由 runner 移除 exact worktree，再按 task workspace ownership 契约清理当前任务临时目录。串行模式不调用 `cleanup-parallel`。
 
 正式 diff 不得包含任务脚本、日志、patch、缓存、诊断或 task workspace 内容。失败或 drift 必须保留现场；不得清理其他任务的 worktree、branch 或目录。
+
+## 9. 状态记录
+
+生命周期状态与三个版本号的单一事实来源是 `${PROJECT_ROOT}/.tmp/<task-id>/state.json`，定义见 [state-file.md](state-file.md)。该文件只能由 runner `state` 子命令写入：`--init` 创建（lifecycle 固定为 `approved`），`--to` 执行合法迁移并记录 gate/worker/packet 字段，`--show` 读取当前状态。写入是原子的（临时文件 + rename）；schema、迁移表与 gate 前置条件由 runner 内联校验。Coordinator 不得直接编辑 `state.json`。`--project-root` 不做 Git 校验，非 Git 工作区同样使用 `state`。

@@ -5,13 +5,19 @@ SIMULATED CLAUDE CODE POST-APPROVAL DISPATCH TRANSCRIPT
 [coordinator] lifecycle=approved coordinator-write-authority=none
 [gate] gate=post-approval-dispatch adapter-version=2 plan-version=1 context-version=1 task-version=1 task-id=claude-success expected-dispatch-mode=foreground worker-transport=Agent(dev-with-tdd)
 [gate] environment-verification=runner-verify-require-clean result=passed
+[state] runner-state --to prepared gate.status=passed verify_result=passed head=sha40 dispatch_mode=foreground worker_transport=Agent(dev-with-tdd)
 [coordinator] lifecycle=prepared
 [coordinator] transport=Agent(dev-with-tdd) actual-dispatch-mode=foreground
+[state] runner-state --to dispatched worker.handle=claude-worker-1 transport=Agent(dev-with-tdd)
 [coordinator] lifecycle=dispatched
+[state] runner-state --to authorized
 [coordinator] lifecycle=authorized
+[state] runner-state --to running
 [worker] lifecycle=running handshake=validated
 [host] completion=foreground-agent-result
+[state] runner-state --to handoff-received
 [coordinator] lifecycle=handoff-received
+[state] runner-state --to reviewing
 [coordinator] lifecycle=reviewing
 
 [scenario=coordinator-direct-write-blocked]

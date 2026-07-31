@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import os
 import shutil
 import subprocess
@@ -527,6 +528,124 @@ class InstallScriptTest(unittest.TestCase):
             stale.read_text(encoding="utf-8"), "stale profile copy"
         )
         self.assertNotIn(".hermes/profiles", result.stdout)
+
+    def load_settings(self, platform: str) -> dict:
+        import json
+
+        return json.loads(
+            (self.home / platform / "settings.json").read_text(encoding="utf-8")
+        )
+
+    def test_harden_merges_hooks_into_existing_settings(self) -> None:
+        (self.home / ".claude").mkdir()
+        settings = self.home / ".claude" / "settings.json"
+        settings.write_text(
+            '{"permissions": {"allow": ["Bash(git log)"]}}', encoding="utf-8"
+        )
+
+        result = run_install(self.home, args=("--harden-claude",))
+
+        self.assert_success(result)
+        data = self.load_settings(".claude")
+        self.assertEqual(
+            data["permissions"], {"allow": ["Bash(git log)"]}
+        )
+        pretool = data["hooks"]["PreToolUse"]
+        self.assertEqual(
+            {group["matcher"] for group in pretool},
+            {"Write", "Edit", "MultiEdit", "Bash", "Agent"},
+        )
+        self.assertTrue(data["hooks"]["Stop"])
+        # Hook commands point at the installed bundle.
+        command = pretool[0]["hooks"][0]["command"]
+        self.assertIn("/.claude/skills/plan-dev-tasks/scripts/hooks/", command)
+
+    def test_harden_creates_settings_when_absent(self) -> None:
+        (self.home / ".claude").mkdir()
+
+        result = run_install(self.home, args=("--harden-claude",))
+
+        self.assert_success(result)
+        data = self.load_settings(".claude")
+        self.assertEqual(
+            len(data["hooks"]["PreToolUse"]), 5
+        )
+
+    def test_harden_rejects_invalid_settings_and_leaves_untouched(self) -> None:
+        (self.home / ".claude").mkdir()
+        settings = self.home / ".claude" / "settings.json"
+        settings.write_text("{not json", encoding="utf-8")
+
+        result = run_install(self.home, args=("--harden-claude",))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("harden step failed", result.stderr)
+        self.assertEqual(
+            settings.read_text(encoding="utf-8"), "{not json"
+        )
+
+    def test_harden_is_idempotent(self) -> None:
+        (self.home / ".claude").mkdir()
+        args = ("--harden-claude",)
+
+        self.assert_success(run_install(self.home, args=args))
+        second = run_install(self.home, args=args)
+
+        self.assert_success(second)
+        data = self.load_settings(".claude")
+        self.assertEqual(len(data["hooks"]["PreToolUse"]), 5)
+
+    def test_unharden_removes_only_bundle_entries(self) -> None:
+        (self.home / ".claude").mkdir()
+        self.assert_success(
+            run_install(self.home, args=("--harden-claude",))
+        )
+        data = self.load_settings(".claude")
+        data["hooks"]["PreToolUse"][0]["hooks"].append(
+            {"type": "command", "command": "python3 /foreign/hook.py"}
+        )
+        (self.home / ".claude" / "settings.json").write_text(
+            json.dumps(data), encoding="utf-8"
+        )
+
+        result = run_install(self.home, args=("--unharden-claude",))
+
+        self.assert_success(result)
+        data = self.load_settings(".claude")
+        # Foreign entries survive; bundle entries are gone.
+        self.assertIn("python3 /foreign/hook.py", str(data))
+        self.assertNotIn("plan-dev-tasks/scripts/hooks", str(data))
+
+    def test_harden_requires_claude_platform_root(self) -> None:
+        (self.home / ".hermes").mkdir()
+
+        result = run_install(self.home, args=("--harden-claude",))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "--harden-claude requires at least one existing Claude Code platform root",
+            result.stderr,
+        )
+
+    def test_harden_flags_are_mutually_exclusive(self) -> None:
+        (self.home / ".claude").mkdir()
+
+        result = run_install(
+            self.home,
+            args=("--harden-claude", "--unharden-claude"),
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("mutually exclusive", result.stderr)
+
+    def test_harden_never_touches_hermes(self) -> None:
+        (self.home / ".claude").mkdir()
+        (self.home / ".hermes").mkdir()
+
+        result = run_install(self.home, args=("--harden-claude",))
+
+        self.assert_success(result)
+        self.assertFalse((self.home / ".hermes" / "settings.json").exists())
 
 
 if __name__ == "__main__":

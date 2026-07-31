@@ -1204,6 +1204,35 @@ class PlanDevTasksContractTest(unittest.TestCase):
     def test_language_contract(self) -> None:
         self.assert_all(self.skill + self.packet + self.review, ("默认使用简体中文", "Language check: passed"))
 
+    def test_state_file_is_runner_owned_single_source_of_truth(self) -> None:
+        self.assertTrue((ROOT / "references/state-file.md").is_file())
+        self.assert_all(
+            self.skill + self.workspace + self.git_workflow,
+            (
+                "state.json",
+                "单一事实来源",
+                "runner `state`",
+                "不得直接编辑",
+                "state --to prepared",
+                "state --to blocked",
+            ),
+        )
+        self.assert_all(self.workspace, ("只能由 bundled runner `state` 子命令写入",))
+        self.assert_all(self.git_workflow, ("`state`", "非 Git 工作区同样使用 `state`",))
+
+    def test_dispatch_transcript_records_state_transitions(self) -> None:
+        self.assert_all(
+            self.claude_dispatch_transcript,
+            (
+                "runner-state --to prepared",
+                "runner-state --to dispatched",
+                "runner-state --to authorized",
+                "runner-state --to running",
+                "runner-state --to handoff-received",
+                "runner-state --to reviewing",
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

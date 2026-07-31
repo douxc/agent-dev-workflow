@@ -829,9 +829,398 @@ EOF
     emit retained_branch "$branch"
 }
 
+state_command() {
+    mode=
+    project_root=
+    task_id=
+    versions=
+    lifecycle=
+    gate=
+    worker=
+    packet=
+    evidence=
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --init)
+                mode=init
+                shift
+                ;;
+            --show)
+                mode=show
+                shift
+                ;;
+            --to)
+                need_value "$@"
+                mode=to
+                lifecycle=$2
+                shift 2
+                ;;
+            --project-root)
+                need_value "$@"
+                project_root=$2
+                shift 2
+                ;;
+            --task-id)
+                need_value "$@"
+                task_id=$2
+                shift 2
+                ;;
+            --versions)
+                need_value "$@"
+                versions=$2
+                shift 2
+                ;;
+            --gate)
+                need_value "$@"
+                gate=$2
+                shift 2
+                ;;
+            --worker)
+                need_value "$@"
+                worker=$2
+                shift 2
+                ;;
+            --packet)
+                need_value "$@"
+                packet=$2
+                shift 2
+                ;;
+            --evidence)
+                need_value "$@"
+                evidence=$2
+                shift 2
+                ;;
+            *) die "unknown state argument: $1" ;;
+        esac
+    done
+    [ -n "$mode" ] || die "state requires --init, --show, or --to"
+    [ -n "$project_root" ] || die "state requires --project-root"
+    [ -n "$task_id" ] || die "state requires --task-id"
+    validate_id "$task_id" "task ID"
+    if [ "$mode" = init ]; then
+        [ -n "$versions" ] || die "state --init requires --versions"
+    elif [ "$mode" = to ]; then
+        [ -n "$lifecycle" ] || die "state --to requires a lifecycle"
+    fi
+
+    # Deliberately does NOT call load_project_root: state recording must work
+    # for non-Git workspaces too. Ownership is still enforced via the marker.
+    PROJECT_ROOT=$(canonical_dir "$project_root")
+    task_dir_path=$PROJECT_ROOT/.tmp/$task_id
+    task_dir=$(canonical_dir "$task_dir_path")
+    case "$task_dir" in
+        "$PROJECT_ROOT"/.tmp/"$task_id") ;;
+        *) die "task directory escapes project .tmp root" ;;
+    esac
+    validate_owner "$task_id" "$task_dir"
+
+    python3 - "$mode" "$PROJECT_ROOT" "$task_id" "$task_dir" \
+        "$task_dir/state.json" "$versions" "$lifecycle" "$gate" \
+        "$worker" "$packet" "$evidence" <<'PY'
+import datetime
+import json
+import os
+import pathlib
+import sys
+
+LIFECYCLES = [
+    "approved", "prepared", "dispatched", "authorized", "running",
+    "handoff-received", "reviewing", "accepted", "rework",
+    "context-gap", "blocked", "committed", "finalized",
+]
+LEGAL = {
+    "approved": ["prepared"],
+    "prepared": ["dispatched"],
+    "dispatched": ["authorized"],
+    "authorized": ["running"],
+    "running": ["handoff-received"],
+    "handoff-received": ["reviewing"],
+    "reviewing": ["accepted", "rework", "context-gap", "blocked"],
+    "accepted": ["committed"],
+    "committed": ["finalized"],
+    "rework": ["authorized", "running"],
+    "context-gap": ["prepared", "blocked"],
+    "blocked": [],
+    "finalized": [],
+}
+GATE_KEYS = {
+    "status", "blocked_reason", "approval_event", "plan_version",
+    "context_version", "task_version", "dispatch_mode",
+    "worker_transport", "verify_result", "head", "verified_at",
+}
+GATE_STATUSES = ["pending", "passed", "failed", "not-applicable"]
+BLOCKED_REASONS = [
+    "none", "coordinator_direct_write", "dispatch_mode_mismatch", "other",
+]
+DISPATCH_MODES = ["foreground", "background-aggregate", "unknown"]
+VERIFY_RESULTS = ["passed", "failed", "not-applicable"]
+PACKET_KEYS = [
+    "id", "packet_id", "lifecycle", "task_branch", "worktree",
+    "expected_head", "allowed_write_paths",
+]
+VERSION_KEYS = ["plan", "context", "task"]
+STATE_KEYS = {
+    "schema_version", "task_id", "project_root", "task_directory",
+    "created_at", "lifecycle", "gate", "versions", "packets",
+    "worker", "transitions",
+}
+SAFE_PATH_CHARS = set(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-"
+)
+
+(mode, project_root, task_id, task_dir, state_file, versions_arg,
+ lifecycle, gate_arg, worker_arg, packet_arg, evidence) = sys.argv[1:]
+
+
+def fail(message):
+    print("error: %s" % message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def now_iso():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def check_text(value, label):
+    if value and any(ord(c) < 32 for c in value):
+        fail("invalid %s" % label)
+
+
+def check_head(value):
+    if value in ("", "not-applicable"):
+        return
+    if len(value) != 40 or any(c not in "0123456789abcdef" for c in value):
+        fail("invalid head: %s" % value)
+
+
+def check_write_path(value):
+    if not value or value == "." or value.startswith("/") or \
+            value.startswith("-") or ".." in value:
+        fail("unsafe write path: %s" % value)
+    if any(c not in SAFE_PATH_CHARS for c in value):
+        fail("unsafe write path: %s" % value)
+
+
+def parse_pairs(raw, allowed, label):
+    result = {}
+    paths_tail = False
+    for item in raw.split(","):
+        if not item:
+            continue
+        if "=" in item:
+            key, value = item.split("=", 1)
+            if key not in allowed:
+                fail("unknown %s field: %s" % (label, key))
+            result[key] = value
+            if key == "allowed_write_paths":
+                paths_tail = True
+        elif paths_tail:
+            result["allowed_write_paths"] = (
+                result.get("allowed_write_paths", "") + "," + item
+            )
+        else:
+            fail("malformed %s field: %s" % (label, item))
+    return result
+
+
+def load_state():
+    try:
+        data = json.loads(pathlib.Path(state_file).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail("missing state.json: %s" % state_file)
+    except (OSError, ValueError) as error:
+        fail("invalid state.json: %s" % error)
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        fail("invalid state.json: schema version mismatch")
+    unknown = set(data) - STATE_KEYS
+    if unknown:
+        fail("invalid state.json: unknown keys: %s" % ",".join(sorted(unknown)))
+    for key in ("task_id", "project_root", "task_directory", "created_at",
+                "lifecycle"):
+        if not isinstance(data.get(key), str) or not data[key]:
+            fail("invalid state.json: missing %s" % key)
+    if data["task_id"] != task_id:
+        fail("invalid state.json: task id mismatch")
+    if data["lifecycle"] not in LIFECYCLES:
+        fail("invalid state.json: lifecycle %s" % data["lifecycle"])
+    for key in ("gate", "versions", "worker", "packets", "transitions"):
+        container = dict if key in ("gate", "versions", "worker") else list
+        if not isinstance(data.get(key), container):
+            fail("invalid state.json: malformed %s" % key)
+    return data
+
+
+def write_state(data):
+    tmp_path = state_file + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+        os.replace(tmp_path, state_file)
+    except OSError as error:
+        fail("cannot write state.json: %s" % error)
+
+
+def emit_state(data):
+    transitions = data["transitions"]
+    updated_at = transitions[-1]["at"] if transitions else data["created_at"]
+    print("task_id\t%s" % data["task_id"])
+    print("lifecycle\t%s" % data["lifecycle"])
+    print("gate_status\t%s" % data["gate"]["status"])
+    print("updated_at\t%s" % updated_at)
+
+
+if mode == "init":
+    if os.path.exists(state_file):
+        fail("state.json already exists: %s" % state_file)
+    versions = {}
+    for item in versions_arg.split(","):
+        if not item:
+            continue
+        if "=" not in item:
+            fail("invalid version entry: %s" % item)
+        key, value = item.split("=", 1)
+        if key not in VERSION_KEYS:
+            fail("invalid version key: %s" % key)
+        if not value or any(ord(c) < 32 for c in value) or "," in value:
+            fail("invalid version value: %s" % value)
+        versions[key] = value
+    for key in VERSION_KEYS:
+        if key not in versions:
+            fail("missing version: %s" % key)
+    data = {
+        "schema_version": 1,
+        "task_id": task_id,
+        "project_root": project_root,
+        "task_directory": task_dir,
+        "created_at": now_iso(),
+        "lifecycle": "approved",
+        "gate": {
+            "status": "pending",
+            "blocked_reason": "none",
+            "approval_event": "",
+            "plan_version": versions["plan"],
+            "context_version": versions["context"],
+            "task_version": versions["task"],
+            "dispatch_mode": "unknown",
+            "worker_transport": "",
+            "verify_result": "not-applicable",
+            "head": "not-applicable",
+            "verified_at": None,
+        },
+        "versions": versions,
+        "packets": [],
+        "worker": {"handle": None, "transport": None},
+        "transitions": [
+            {"from": "none", "to": "approved", "at": now_iso(),
+             "evidence": "init"},
+        ],
+    }
+    write_state(data)
+    emit_state(data)
+elif mode == "to":
+    data = load_state()
+    if lifecycle not in LIFECYCLES:
+        fail("invalid lifecycle: %s" % lifecycle)
+    current = data["lifecycle"]
+    if lifecycle not in LEGAL[current]:
+        fail("illegal state transition: %s -> %s" % (current, lifecycle))
+
+    gate = data["gate"]
+    if gate_arg:
+        parsed = parse_pairs(gate_arg, GATE_KEYS, "gate")
+        check_text(parsed.get("approval_event", ""), "approval event")
+        if "status" in parsed and parsed["status"] not in GATE_STATUSES:
+            fail("invalid gate status: %s" % parsed["status"])
+        if "blocked_reason" in parsed and \
+                parsed["blocked_reason"] not in BLOCKED_REASONS:
+            fail("invalid blocked reason: %s" % parsed["blocked_reason"])
+        if "dispatch_mode" in parsed and \
+                parsed["dispatch_mode"] not in DISPATCH_MODES:
+            fail("invalid dispatch mode: %s" % parsed["dispatch_mode"])
+        if "verify_result" in parsed and \
+                parsed["verify_result"] not in VERIFY_RESULTS:
+            fail("invalid verify result: %s" % parsed["verify_result"])
+        if "head" in parsed:
+            check_head(parsed["head"])
+        for vkey in ("plan_version", "context_version", "task_version"):
+            if vkey in parsed:
+                check_text(parsed[vkey], vkey)
+                if parsed[vkey] != data["versions"][vkey.replace("_version", "")]:
+                    fail("gate %s does not match versions" % vkey)
+        gate.update(parsed)
+
+    worker = data["worker"]
+    if worker_arg:
+        parsed = parse_pairs(worker_arg, {"handle", "transport"}, "worker")
+        check_text(parsed.get("handle", ""), "worker handle")
+        check_text(parsed.get("transport", ""), "worker transport")
+        worker.update({k: (v if v else None) for k, v in parsed.items()})
+
+    packets = data["packets"]
+    if packet_arg:
+        parsed = parse_pairs(packet_arg, set(PACKET_KEYS), "packet")
+        if "id" in parsed:
+            parsed["packet_id"] = parsed.pop("id")
+        if "packet_id" not in parsed:
+            fail("packet requires id")
+        check_text(parsed["packet_id"], "packet id")
+        if "lifecycle" in parsed and parsed["lifecycle"] not in LIFECYCLES:
+            fail("invalid packet lifecycle: %s" % parsed["lifecycle"])
+        if "task_branch" in parsed:
+            check_text(parsed["task_branch"], "packet branch")
+        if "worktree" in parsed:
+            check_text(parsed["worktree"], "packet worktree")
+        if "expected_head" in parsed:
+            check_head(parsed["expected_head"])
+        if "allowed_write_paths" in parsed:
+            paths = [p for p in parsed["allowed_write_paths"].split(",") if p]
+            for path in paths:
+                check_write_path(path)
+            parsed["allowed_write_paths"] = paths
+        for existing in packets:
+            if existing.get("packet_id") == parsed["packet_id"]:
+                existing.update(parsed)
+                break
+        else:
+            packet = dict(parsed)
+            packet.setdefault("lifecycle", data["lifecycle"])
+            packet.setdefault("task_branch", None)
+            packet.setdefault("worktree", None)
+            packet.setdefault("expected_head", None)
+            packet.setdefault("allowed_write_paths", [])
+            packets.append(packet)
+
+    if lifecycle == "prepared" and gate["status"] != "passed":
+        fail("state transition to prepared requires gate passed")
+    if lifecycle == "blocked" and (
+            not gate.get("blocked_reason") or gate["blocked_reason"] == "none"):
+        fail("state transition to blocked requires a blocked reason")
+    if lifecycle == "dispatched" and not worker.get("transport"):
+        fail("state transition to dispatched requires worker transport")
+
+    check_text(evidence, "evidence")
+    data["lifecycle"] = lifecycle
+    data["gate"] = gate
+    data["worker"] = worker
+    data["packets"] = packets
+    data["transitions"].append({
+        "from": current, "to": lifecycle, "at": now_iso(),
+        "evidence": evidence,
+    })
+    write_state(data)
+    emit_state(data)
+elif mode == "show":
+    data = load_state()
+    emit_state(data)
+else:
+    fail("unknown state mode: %s" % mode)
+PY
+}
+
 usage() {
     printf '%s\n' \
-        "usage: git-workflow.sh <inspect|sync|prepare-serial|prepare-parallel|verify|commit|push|cleanup-parallel> [options]" >&2
+        "usage: git-workflow.sh <inspect|sync|prepare-serial|prepare-parallel|verify|commit|push|cleanup-parallel|state> [options]" >&2
     exit 2
 }
 
@@ -847,5 +1236,6 @@ case "$command_name" in
     commit) commit_command "$@" ;;
     push) push_command "$@" ;;
     cleanup-parallel) cleanup_parallel_command "$@" ;;
+    state) state_command "$@" ;;
     *) usage ;;
 esac

@@ -96,6 +96,21 @@ profile 必须先用 `hermes profile create <name>` 创建。profile 根目录�
 `skip`，不会代为创建；根目录已存在而 `skills/` 缺失时，安装器会创建 `skills/` 并复制
 skill。
 
+如需在 Claude Code 上启用约束强制层（可选），追加 `--harden-claude`：
+
+```bash
+./install.sh --harden-claude
+```
+
+安装器向每个已存在的 Claude 平台根目录的 `settings.json` 合并本 bundle 的 hooks 条目
+（`--unharden-claude` 精确移除）：PreToolUse 强制状态文件保护、业务写边界、Git 所有权
+与派发门；Stop 对非法终止与未派发任务发出警告。合并保留 settings.json 的其他键、可重复
+执行；settings.json 必须是严格 JSON（JSONC 注释会被拒绝且文件不被改动）。要求至少一个
+`.claude`、`.claudeD` 或 `.claudeP` 根目录存在；`.hermes` 与命名 profile 永不被触碰。
+Claude Code 版本低于 2.1.214 时输出警告（hook 依赖 subagent 标识）。详见
+`skills/plan-dev-tasks/references/claude-code-flow.md` 的强制层章节与
+`references/state-file.md`。
+
 脚本始终将两套共享 skill 成对、直接复制到每个已存在平台根目录的 `skills/` 下：
 
 ```text
@@ -115,7 +130,7 @@ Claude Code 的两个 custom agent definitions 直接复制到每个已存在的
 
 源仓库是唯一 canonical 来源；安装器只把 skill 与 agent 直接复制到各平台发现它们的目标目录，不保留单独的 canonical 副本，也不创建任何软链接。安装器检查 `~/.claude`、`~/.claudeD`、`~/.claudeP` 与 `~/.hermes`。指定 `--hermes-profile <name>` 时，还检查 `~/.hermes/profiles/<name>`。仅当平台根目录已经存在时才安装；平台根目录不存在时输出 `skip`，不会代为创建。
 
-安装器不会创建 `.hermes/agents`，也不会在任何命名 profile 下创建 `agents/`，也不会修改任何平台的默认 agent、权限或全局配置。Claude Code 安装新增 definitions 后，需要启动新会话或重启现有会话才能在 `/agents` 中看到它们。
+安装器不会创建 `.hermes/agents`，也不会在任何命名 profile 下创建 `agents/`，也不会修改任何平台的默认 agent、权限或全局配置。Claude Code 安装新增 definitions 后，需要启动新会话或重启现有会话才能在 `/agents` 中看到它们。默认安装不触碰任何配置；仅当显式传入 `--harden-claude` 时，安装器才向已存在的 Claude 平台根目录的 `settings.json` 合并本 bundle 的 hooks 条目（保留其他键、可重复执行，`--unharden-claude` 精确移除），且不触碰 Hermes 与其他平台配置。
 
 脚本可以重复运行。每次运行时，安装器只处理上述计算出的精确目标：对自身的 skill 目录、agent 文件与平台容器（包括旧版安装留下的软链接）执行永久删除，即先删除再全新复制。此操作不可恢复；安装器不会创建新的 `.backup.*`，也不会扫描或删除邻接的历史 `.backup.*` 文件。`HOME`、源 skill、源 agent definition 与既有平台 `skills/`、`agents/` 容器都会在首次删除前完成校验；容器若是普通文件而非目录，安装器停止并报错，不静默覆盖。profile 名称在解析参数时即校验，非法名称直接报错退出；既有 profile 的 `skills/` 容器与平台容器一样在首次删除前完成校验。从旧的软链接安装升级时，直接重跑脚本即可：旧软链接会被删除并替换为真实副本。
 
@@ -125,6 +140,7 @@ Claude Code 的两个 custom agent definitions 直接复制到每个已存在的
 .
 ├── README.md
 ├── install.sh
+├── install-harden.py
 ├── project-map.md
 ├── adapters/
 │   └── claude-code/
@@ -133,15 +149,22 @@ Claude Code 的两个 custom agent definitions 直接复制到每个已存在的
 │           └── dev-with-tdd.md
 ├── skills/
 │   ├── plan-dev-tasks/
-│   │   └── references/
-│   │       ├── claude-code-flow.md
-│   │       ├── hermes-flow.md
-│   │       ├── git-workflow.md
-│   │       ├── human-approval.md
-│   │       ├── project-map.md
-│   │       ├── review-checklist.md
-│   │       ├── task-packet.md
-│   │       └── task-workspace.md
+│   │   ├── references/
+│   │   │   ├── claude-code-flow.md
+│   │   │   ├── hermes-flow.md
+│   │   │   ├── git-workflow.md
+│   │   │   ├── human-approval.md
+│   │   │   ├── project-map.md
+│   │   │   ├── review-checklist.md
+│   │   │   ├── state-file.md
+│   │   │   ├── task-packet.md
+│   │   │   └── task-workspace.md
+│   │   └── scripts/
+│   │       ├── git-workflow.sh
+│   │       └── hooks/
+│   │           ├── lib/state.py
+│   │           ├── pretool_guard.py
+│   │           └── stop_guard.py
 │   └── dev-with-tdd/
 └── tests/
     ├── test_documentation.py

@@ -123,6 +123,7 @@ Git 仓库写入前还必须：
 - 可读取 `Allowed discovery paths` 指定的路径、目标文件直接依赖、相关测试和适用项目指令，以验证真实行为。
 - 只加载当前 feature 所需的上下文，不主动扫描整个仓库。
 - 只能修改 `Allowed write paths`，并避开 `Forbidden paths` 与 `Forbidden side effects`。
+- 在启用强制层的 Claude Code 宿主上，业务写入会被 PreToolUse hook 按 packet 的 `Allowed write paths` 与任务状态机械校验：路径在允许范围内且任务处于 `authorized`/`running`/`rework` 时放行，越界写入被拒绝（`worker_write_outside_packet`）。被拒绝时不得重试绕行或改用 shell 拼接命令，按 §4 以 `Status: blocked` 报告并说明原因。
 - 保留 `Existing user changes`，不得覆盖、重置或顺手整理无关改动。
 - 发现摘要与代码不一致时记录 `Context deviations`；不得把摘要当作代码快照。
 - `serial` 或 `parallel` 是 Coordinator 已决定的 Git mode；worker 不得自行创建子任务、切换 mode 或改变执行目录，一次 packet 一个 feature。
@@ -208,7 +209,7 @@ Language check: passed
 - 安装器把两套 skill 直接成对复制到每个已存在平台根目录的 `skills/` 下（`.claude`、`.claudeD`、`.claudeP`、`.hermes`）；源仓库为唯一 canonical 来源，不保留单独的 canonical 副本，也不创建任何软链接。
 - 仅当平台根目录已经存在时才安装；平台根目录不存在时输出 `skip`，不得代为创建。
 - Claude Code 的命名 agent definitions 直接复制到每个已存在的 `.claude`、`.claudeD`、`.claudeP` 的 `agents/` 下；`.hermes` 不得创建 `agents/`，它使用 Hermes delegation child，不使用 Claude agent definitions。
-- 安装器不得修改任何平台的默认 agent、权限或全局配置。Claude agent definitions 安装后需开启新会话或重启现有会话，才会出现在 `/agents`。
+- 安装器不得修改任何平台的默认 agent、权限或全局配置。Claude agent definitions 安装后需开启新会话或重启现有会话，才会出现在 `/agents`。默认安装不触碰任何配置；仅当显式传入 `--harden-claude` 时，安装器才向已存在的 Claude 平台根目录的 `settings.json` 合并本 bundle 的 hooks 条目（保留其他键、可重复执行，`--unharden-claude` 精确移除），且不触碰 Hermes 与其他平台配置。
 - 安装器只处理计算出的精确目标：每次安装都对自身的 skill 目录、agent 文件与平台容器（包括旧版安装留下的软链接）执行永久删除，即先删除再全新复制；不会创建新的 `.backup.*`，也不会扫描或删除邻接的历史 `.backup.*` 文件。
 - `HOME`、源 skill、源 agent definition 与既有平台 `skills/`、`agents/` 容器必须在首次删除前完成校验；容器若是普通文件而非目录，必须 fail closed，不得静默覆盖。
-- 不处理其他位置、hooks、配置或其他 skill。
+- 默认不处理其他位置、hooks、配置或其他 skill；`--harden-claude` 是唯一的显式配置变更例外，且只触及本 bundle 的 hook 条目。

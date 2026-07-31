@@ -14,6 +14,8 @@ ${PROJECT_ROOT}/.tmp/<task-id>/worktrees/<packet-id>/
 
 串行模式使用当前主 worktree，不创建 worktree。并行 worktree 和受控依赖软链接只能由 `scripts/git-workflow.sh` 创建；任务脚本、日志、诊断、patch、缓存和 runner 临时输出仍留在 task workspace，不得进入正式 diff。
 
+`state.json`（见 [state-file.md](state-file.md)）是生命周期状态与版本号的单一事实来源，只能由 bundled runner `state` 子命令写入；随任务目录清理一并删除，无需单独处理。
+
 首次需要临时目录时：
 
 1. 解析并规范化 `PROJECT_ROOT`。

@@ -77,6 +77,15 @@ class DocumentationContractTest(unittest.TestCase):
             "重复运行",
         )
 
+    def test_documents_optional_hardening_and_config_carveout(self) -> None:
+        self.assert_readme_contains(
+            "--harden-claude",
+            "--unharden-claude",
+            "合并本 bundle 的 hooks 条目",
+            "默认安装不触碰任何配置",
+            "settings.json 必须是严格 JSON",
+        )
+
     def test_documents_repository_layout_and_validation(self) -> None:
         self.assert_readme_contains(
             "adapters/claude-code/agents/",

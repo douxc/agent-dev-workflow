@@ -39,6 +39,8 @@ remove_existing() {
 # or mutation; names are restricted to [A-Za-z0-9._-] with a non-dot start,
 # which also guarantees word-splitting safety for the loops below.
 HERMES_PROFILES=""
+harden_flag=no
+unharden_flag=no
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,11 +54,30 @@ while [ $# -gt 0 ]; do
       HERMES_PROFILES="$HERMES_PROFILES $2"
       shift 2
       ;;
+    --harden-claude)
+      harden_flag=yes
+      shift
+      ;;
+    --unharden-claude)
+      unharden_flag=yes
+      shift
+      ;;
     *)
       fail "unknown argument: $1"
       ;;
   esac
 done
+
+if [ "$harden_flag" = yes ] && [ "$unharden_flag" = yes ]; then
+  fail "--harden-claude and --unharden-claude are mutually exclusive"
+fi
+if [ "$harden_flag" = yes ]; then
+  harden_mode=merge
+elif [ "$unharden_flag" = yes ]; then
+  harden_mode=unmerge
+else
+  harden_mode=
+fi
 
 if [ -z "${HOME:-}" ]; then
   fail "HOME must be a non-empty absolute directory"
@@ -187,5 +208,44 @@ for profile in $HERMES_PROFILES; do
 
   install_skills_into "$profile_root"
 done
+
+if [ -n "$harden_mode" ]; then
+  claude_root_found=no
+  for platform in $CLAUDE_PLATFORM_NAMES; do
+    platform_root="$HOME_DIR/$platform"
+    if [ ! -d "$platform_root" ]; then
+      continue
+    fi
+    claude_root_found=yes
+    settings_path="$platform_root/settings.json"
+    hooks_dir="$platform_root/skills/plan-dev-tasks/scripts/hooks"
+    if [ "$harden_mode" = merge ] && [ ! -d "$hooks_dir" ]; then
+      fail "hook bundle missing after install: $hooks_dir"
+    fi
+    python3 "$SCRIPT_DIR/install-harden.py" "$harden_mode" \
+      "$settings_path" "$hooks_dir" ||
+      fail "harden step failed for $platform_root"
+    printf '%s %s\n' "$harden_mode" "$platform_root"
+  done
+  if [ "$claude_root_found" = no ]; then
+    if [ "$harden_mode" = merge ]; then
+      fail "--harden-claude requires at least one existing Claude Code platform root"
+    else
+      fail "--unharden-claude requires at least one existing Claude Code platform root"
+    fi
+  fi
+  if [ "$harden_mode" = merge ]; then
+    installed_version=$(claude --version 2>/dev/null || :)
+    parsed_version=$(printf '%s\n' "$installed_version" |
+      sed -n 's/^\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p')
+    if [ -n "$parsed_version" ]; then
+      if python3 -c 'import sys
+v = tuple(int(x) for x in sys.argv[1].split("."))
+sys.exit(0 if v < (2, 1, 214) else 1)' "$parsed_version"; then
+        printf 'warning: Claude Code %s is older than 2.1.214; hook enforcement may be incomplete\n' "$parsed_version" >&2
+      fi
+    fi
+  fi
+fi
 
 printf 'done: installed paired skills from %s\n' "$SCRIPT_DIR"
