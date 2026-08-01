@@ -126,6 +126,11 @@ class DocumentationContractTest(unittest.TestCase):
             "更新时机",
         )
 
+    def test_log_location_in_layout(self) -> None:
+        self.assertIn("rebuttal.md（仅分歧时）", self.readme)
+        self.assertIn("└── full-tests.log", self.readme)
+        self.assertNotIn("仅分歧时）, full-tests.log", self.readme)
+
 
 if __name__ == "__main__":
     unittest.main()

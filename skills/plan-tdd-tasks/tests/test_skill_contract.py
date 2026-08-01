@@ -133,6 +133,12 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assertIn("无状态机、无版本号、无 gates", SKILL)
         self.assertNotIn("无 project map", SKILL)
 
+    def test_cross_reference_corrections(self) -> None:
+        self.assertIn("§9 最终提交是唯一例外", SKILL)
+        self.assertIn("全量留给 §9", SKILL)
+        self.assertNotIn("§8 最终提交", SKILL)
+        self.assertNotIn("全量留给 §7", SKILL)
+
 
 if __name__ == "__main__":
     unittest.main()

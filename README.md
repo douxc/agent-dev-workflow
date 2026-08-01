@@ -70,7 +70,8 @@ infra:
 ```text
 .tmp/<task-id>/
 ├── package/  ac-list.md, scope.md, test-command.txt, diff.txt, code/
-└── review/   A.md, B.md, rebuttal.md（仅分歧时）, full-tests.log
+├── review/   A.md, B.md, rebuttal.md（仅分歧时）
+└── full-tests.log
 ```
 
 ### project-map.md（项目地图：项目的索引）
