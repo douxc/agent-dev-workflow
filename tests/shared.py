@@ -68,6 +68,11 @@ PACKAGE_FILES = (
 TMP_ROOT = ".tmp"
 REVIEW_DIR = "review"
 
+# project-map.md (项目地图) markers — reference category list, chosen by the
+# main agent per project shape (frontend/backend split vs monolith).
+PROJECT_MAP = "project-map.md"
+PM_SECTIONS = ("架构", "选型", "前端路由", "后端 API", "公共组件", "API auth")
+
 # Installer targets and legacy removal.
 PLATFORMS = (".claude", ".claudeD", ".claudeP")
 AGENT_NAMES = SKILL_NAMES

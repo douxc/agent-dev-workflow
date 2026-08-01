@@ -74,6 +74,12 @@ class BlindReviewTasksContractTest(unittest.TestCase):
     def test_evidence_requires_file_line(self) -> None:
         self.assert_all("包内路径 + 行号", "没有行号不可称证据")
 
+    def test_blindness_boundary_project_map(self) -> None:
+        # Lock-in assertion: the blind reviewer must never learn about the
+        # project map (it carries implementation-side context). Intentionally
+        # green by construction — guards against future accidental mention.
+        self.assertNotIn(shared.PROJECT_MAP, SKILL)
+
 
 if __name__ == "__main__":
     unittest.main()

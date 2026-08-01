@@ -73,6 +73,10 @@ infra:
 └── review/   A.md, B.md, rebuttal.md（仅分歧时）, full-tests.log
 ```
 
+### project-map.md（项目地图：项目的索引）
+
+`PROJECT_ROOT/project-map.md` 是本 bundle 唯一要求主 agent 在业务仓库维护的持久化项目元数据：作为项目的索引，让后续 agent 快速熟悉项目、确认变更文件。内容参考类别（按项目形态取舍）：架构、选型、前端路由、后端 API、公共组件、API auth；只写入方便其他 agent 使用的有价值内容。读取时机、创建时机、更新时机见 `plan-tdd-tasks` skill §11；创建或更新的任务必须将其列入范围声明 `infra:`。它是项目元数据而非规划产物——设计意图仍只存在于对话。盲测者不读取 project-map.md。
+
 ## 脚本接口
 
 脚本随 `plan-tdd-tasks` skill 分发（`${SKILL_ROOT}/scripts/`），以绝对路径调用，均有契约测试。

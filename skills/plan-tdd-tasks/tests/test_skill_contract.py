@@ -101,6 +101,38 @@ class PlanTddTasksContractTest(unittest.TestCase):
     def test_commit_only_declared_files_once(self) -> None:
         self.assert_all("`git add` 只加范围声明内的文件", "一次 `git commit`")
 
+    def test_project_map_semantics(self) -> None:
+        self.assert_all(
+            shared.PROJECT_MAP,
+            "项目地图",
+            "快速熟悉项目",
+            "确认变更文件",
+            "索引",
+            "有价值",
+            "项目元数据",
+            "非规划产物",
+        )
+        for section in shared.PM_SECTIONS:
+            with self.subTest(section=section):
+                self.assertIn(section, SKILL)
+
+    def test_project_map_timing(self) -> None:
+        self.assert_all("读取时机", "创建时机", "更新时机", "文件不存在")
+
+    def test_project_map_scope_interaction(self) -> None:
+        self.assert_all(
+            "列入范围声明 `infra:`",
+            "不复制进 `code/`",
+            "盲测者不读取 project-map.md",
+            "前后端分离",
+            "前后端一体",
+            "取舍",
+        )
+
+    def test_project_map_not_a_planner_state(self) -> None:
+        self.assertIn("无状态机、无版本号、无 gates", SKILL)
+        self.assertNotIn("无 project map", SKILL)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -116,6 +116,16 @@ class DocumentationContractTest(unittest.TestCase):
             "git diff --check",
         )
 
+    def test_documents_project_map(self) -> None:
+        self.assert_readme_contains(
+            shared.PROJECT_MAP,
+            "架构",
+            "选型",
+            "读取时机",
+            "创建时机",
+            "更新时机",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
