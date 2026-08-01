@@ -1,7 +1,0 @@
-interface:
-  display_name: "TDD 单任务执行器"
-  short_description: "依据已批准任务包执行单个 feature 并返回测试证据"
-  default_prompt: "使用 $dev-with-tdd 执行这个已批准且版本完整的 Execution Packet。"
-
-policy:
-  allow_implicit_invocation: false
