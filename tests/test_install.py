@@ -15,11 +15,13 @@ PLATFORMS = shared.PLATFORMS
 LEGACY = shared.LEGACY_SKILLS
 
 
-def run_install(home: str, script: Path = SCRIPT) -> subprocess.CompletedProcess:
+def run_install(
+    home: str, script: Path = SCRIPT, args: tuple = ()
+) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["HOME"] = home
     return subprocess.run(
-        [str(script)],
+        [str(script), *args],
         cwd=script.parent,
         env=env,
         capture_output=True,
@@ -299,6 +301,106 @@ class InstallScriptTest(unittest.TestCase):
             self.assertFalse(
                 (incomplete_home / ".claude" / "skills" / skill).exists()
             )
+
+    def hermes_profile_root(self, profile: str = "coder") -> Path:
+        return self.home / ".hermes" / "profiles" / profile
+
+    def assert_hermes_skill_installed(self, profile: str, skill: str) -> None:
+        installed = self.hermes_profile_root(profile) / "skills" / skill
+        self.assertTrue(installed.is_dir(), msg=f"not a directory: {installed}")
+        self.assertFalse(installed.is_symlink(), msg=f"is a symlink: {installed}")
+        self.assertEqual(
+            (installed / "SKILL.md").read_text(encoding="utf-8"),
+            (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8"),
+        )
+
+    def test_installs_skills_into_named_hermes_profile(self) -> None:
+        profile_root = self.hermes_profile_root()
+        (profile_root / "skills").mkdir(parents=True)
+
+        result = run_install(self.home, args=("-p", "coder"))
+
+        self.assert_success(result)
+        for skill in SKILLS:
+            self.assert_hermes_skill_installed("coder", skill)
+            real_dest = (
+                self.real_home / ".hermes" / "profiles" / "coder"
+                / "skills" / skill
+            )
+            self.assertIn(f"install {real_dest}", result.stdout)
+
+    def test_hermes_mode_ships_no_agents_and_touches_no_claude_platforms(
+        self,
+    ) -> None:
+        profile_root = self.hermes_profile_root()
+        (profile_root / "skills").mkdir(parents=True)
+
+        result = run_install(self.home, args=("-p", "coder"))
+
+        self.assert_success(result)
+        self.assertFalse((profile_root / "agents").exists())
+        self.assertNotIn("/agents/", result.stdout)
+        for platform in PLATFORMS:
+            self.assertFalse((self.home / platform).exists())
+
+    def test_plain_mode_never_creates_hermes_paths(self) -> None:
+        for platform in PLATFORMS:
+            (self.home / platform).mkdir()
+
+        result = run_install(self.home)
+
+        self.assert_success(result)
+        self.assert_platforms_have_direct_copies()
+        self.assertFalse((self.home / ".hermes").exists())
+
+    def test_hermes_mode_skips_missing_profile_without_creating_it(self) -> None:
+        result = run_install(self.home, args=("-p", "missing"))
+
+        self.assert_success(result)
+        self.assertFalse(self.hermes_profile_root("missing").exists())
+        self.assertIn(
+            f"skip {self.real_home / '.hermes' / 'profiles' / 'missing'}",
+            result.stdout,
+        )
+
+    def test_hermes_mode_rejects_bad_inputs_and_blocking_paths(self) -> None:
+        cases = (
+            (("-p",), "-p requires"),
+            (("-p", "a/b"), "invalid profile name"),
+            (("--bogus",), "unknown argument"),
+        )
+        for args, err in cases:
+            with self.subTest(args=args):
+                result = subprocess.run(
+                    [str(SCRIPT), *args],
+                    cwd=SCRIPT.parent,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(err, result.stderr)
+
+        profile_root = self.hermes_profile_root()
+        profile_root.mkdir(parents=True)
+        (profile_root / "skills").write_text("user file", encoding="utf-8")
+        result = run_install(self.home, args=("-p", "coder"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("platform skills path is not a directory", result.stderr)
+
+    def test_hermes_mode_removes_legacy_skills_from_profile(self) -> None:
+        skills_dir = self.hermes_profile_root() / "skills"
+        skills_dir.mkdir(parents=True)
+        legacy_dir = skills_dir / LEGACY[0]
+        legacy_dir.mkdir()
+        (legacy_dir / "SKILL.md").write_text("legacy", encoding="utf-8")
+
+        result = run_install(self.home, args=("-p", "coder"))
+
+        self.assert_success(result)
+        self.assertFalse(legacy_dir.exists())
+        for skill in SKILLS:
+            self.assert_hermes_skill_installed("coder", skill)
 
     def test_rejects_missing_agent_sources_before_installing(self) -> None:
         fake_repo = self.temp / "missing-agent-repo"

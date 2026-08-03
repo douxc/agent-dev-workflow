@@ -5,7 +5,7 @@
 - 本仓库是 Claude Code 的 skill bundle 源码仓库（canonical 来源），非业务应用；安装与验证见 README「安装」「验证」节。
 - 两个成对安装的 skill：`skills/plan-tdd-tasks/`（单 feature 开发全流程主 skill：分析 → 规划（AC 清单 + 范围声明 + test-command.txt）→ TDD → 产出包 + 机械范围检查 → 并行盲测 ×2 → 分歧处理 → 全量测试 → 提交）与 `skills/blind-review-tasks/`（纯只读静态盲审复核者，只由主 skill 并行派发）。
 - 主 skill 随包分发两个脚本：`skills/plan-tdd-tasks/scripts/check-scope.sh`（机械范围检查）与 `run-full-tests.sh`（全量测试），以绝对路径调用，均有契约测试。
-- agent definitions 在 `adapters/claude-code/agents/`（plan-tdd-tasks.md / blind-review-tasks.md）；`install.sh` 把 skills + agents 复制到每个已存在的平台根（~/.claude、~/.claudeD、~/.claudeP），自动移除旧版遗留（plan-dev-tasks / dev-with-tdd），不碰任何配置。
+- agent definitions 在 `adapters/claude-code/agents/`（plan-tdd-tasks.md / blind-review-tasks.md）；`install.sh` 把 skills + agents 复制到每个已存在的平台根（~/.claude、~/.claudeD、~/.claudeP），自动移除旧版遗留（plan-dev-tasks / dev-with-tdd），不碰任何配置；支持 `-p <profile>` 互斥模式分发 skills（无 agents）到 Hermes 命名 profile（~/.hermes/profiles/<profile>/）。
 - 主 skill 支持字面 `/plan-tdd-tasks init` 进入 init 模式（SKILL.md §12）：生成 project-map.md（不存在时）、对已存在地图做漂移判定（核对机械可验证现状事实，经用户同意后更新）、配置项目读权限、一次 chore commit 收尾。
 - 业务仓库侧的唯一持久化项目元数据是 `PROJECT_ROOT/project-map.md`；任务产物在 `.tmp/<task-id>/`（package/ review/ full-tests.log）。
 

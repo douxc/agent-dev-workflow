@@ -147,6 +147,15 @@ class DocumentationContractTest(unittest.TestCase):
             shared.INIT_UPDATE_COMMIT,
         )
 
+    def test_documents_hermes_profile_install(self) -> None:
+        self.assert_readme_contains(
+            shared.FLAG_PROFILE,
+            shared.HERMES_PROFILES_DIR,
+            shared.INSTALL_PROFILE_EXCLUSIVE,
+            shared.HERMES_BLIND_READONLY,
+            shared.HERMES_DELEGATE_TASK,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,7 @@ FLAG_BASE = "--base"
 FLAG_TEST_CMD = "--test-cmd"
 FLAG_WORKDIR = "--workdir"
 FLAG_LOG_FILE = "--log-file"
+FLAG_PROFILE = "-p"
 
 # Exit codes.
 EXIT_PASS = 0
@@ -99,3 +100,11 @@ INIT_UPDATE_COMMIT = "chore: update project-map"
 PLATFORMS = (".claude", ".claudeD", ".claudeP")
 AGENT_NAMES = SKILL_NAMES
 LEGACY_SKILLS = ("plan-dev-tasks", "dev-with-tdd")
+
+# Hermes profile install markers — `install.sh -p <profile>` is mutually
+# exclusive with Claude platform install; named profiles live under
+# ~/.hermes/profiles/; Hermes has no .md agent mechanism so only skills ship.
+HERMES_PROFILES_DIR = ".hermes/profiles"
+INSTALL_PROFILE_EXCLUSIVE = "互斥"
+HERMES_BLIND_READONLY = "指令约束而非 harness 强制"
+HERMES_DELEGATE_TASK = "delegate_task"

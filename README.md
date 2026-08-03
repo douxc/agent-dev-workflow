@@ -120,7 +120,9 @@ cd agent-dev-workflow
 
 安装器把两个 skill 与两个 agent definitions 直接复制到每个**已存在**的平台根目录（`~/.claude`、`~/.claudeD`、`~/.claudeP`）的 `skills/` 与 `agents/` 下；平台根目录不存在时输出 `skip`，不会代为创建。源仓库是唯一 canonical 来源：不保留单独的 canonical 副本，不创建任何软链接；每次运行先删除旧目标再全新复制，可重复执行，不产生 `.backup.*`。
 
-安装器**自动移除旧版遗留**（`skills/plan-dev-tasks`、`skills/dev-with-tdd` 及其 agent 文件），不触碰其他任何 skill、agent 或配置。所有校验（HOME、源文件、平台容器）在首次删除前完成；容器若是普通文件而非目录则 fail closed。安装器不接受任何参数（未知参数报错）。
+安装器**自动移除旧版遗留**（`skills/plan-dev-tasks`、`skills/dev-with-tdd` 及其 agent 文件），不触碰其他任何 skill、agent 或配置。所有校验（HOME、源文件、平台容器）在首次删除前完成；容器若是普通文件而非目录则 fail closed。未知参数报错。
+
+`install.sh -p <profile>`（**互斥**模式，与 Claude 平台安装二选一）安装到 Hermes 命名 profile（`~/.hermes/profiles/<profile>/`）：只分发两个 skill（Hermes 无 .md agent 机制，子代理经 `delegate_task` 运行时定义），不触碰 Claude 平台；profile 目录不存在时输出 `skip`，不会代为创建。
 
 **卸载**：手动删除两个 skill 目录与两个 agent 文件：
 
@@ -165,4 +167,4 @@ git diff --check
 - 脚本仅支持 macOS/Linux（bash/sh）。
 - 静态盲测无法捕获运行时错误——由最终全量测试兜底；盲测者之间可能相关性偏盲——由分歧自辩、人工仲裁与 2 轮上限兜底。
 - 盲测者只读由 agent 定义的 `tools: Read, Grep, Glob` 在 harness 层强制；旧版 hooks 强制层不在本设计内（如需可作未来可选加固）。
-- Hermes 平台适配后置。
+- Hermes 平台：`install.sh -p <profile>` 互斥安装到命名 profile；`delegate_task` 子代理继承父代理 toolsets（无只读参数），盲测者只读为**指令约束而非 harness 强制**，留待 VPS 实测。

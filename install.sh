@@ -5,6 +5,7 @@ set -euo pipefail
 readonly SKILL_NAMES="plan-tdd-tasks blind-review-tasks"
 readonly AGENT_NAMES="plan-tdd-tasks blind-review-tasks"
 readonly PLATFORM_NAMES=".claude .claudeD .claudeP"
+readonly HERMES_PROFILES_DIR=".hermes/profiles"
 readonly LEGACY_SKILLS="plan-dev-tasks dev-with-tdd"
 readonly LEGACY_AGENTS="plan-dev-tasks dev-with-tdd"
 
@@ -12,6 +13,30 @@ fail() {
   printf 'error: %s\n' "$*" >&2
   exit 1
 }
+
+# --- argument parsing ---
+# `-p <profile>` selects Hermes profile mode: install into the named Hermes
+# profile (~/.hermes/profiles/<profile>/), mutually exclusive with the Claude
+# platform install that runs when no -p is given.
+profile=
+profile_set=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -p)
+      [ "$#" -ge 2 ] || fail "-p requires a profile name"
+      profile=$2
+      profile_set=1
+      shift 2
+      ;;
+    *) fail "unknown argument: $1" ;;
+  esac
+done
+
+if [ "$profile_set" -eq 1 ]; then
+  case "$profile" in
+    ""|*/*|"."|"..") fail "invalid profile name: $profile" ;;
+  esac
+fi
 
 path_exists() {
   [ -e "$1" ] || [ -L "$1" ]
@@ -34,10 +59,6 @@ remove_existing() {
   rm -rf "$target"
   printf 'remove %s\n' "$target"
 }
-
-if [ $# -gt 0 ]; then
-  fail "unknown argument: $1"
-fi
 
 if [ -z "${HOME:-}" ]; then
   fail "HOME must be a non-empty absolute directory"
@@ -74,18 +95,33 @@ for agent in $AGENT_NAMES; do
   fi
 done
 
-# Validate every platform container up front, before any deletion or copy, so
+# Build the install targets: either the Hermes profile (skills only — Hermes
+# has no .md agent mechanism, subagents are defined at runtime) or the Claude
+# platform roots.
+targets=()
+if [ "$profile_set" -eq 1 ]; then
+  ship_agents=0
+  targets=("$HOME_DIR/$HERMES_PROFILES_DIR/$profile")
+else
+  ship_agents=1
+  for platform in $PLATFORM_NAMES; do
+    targets+=("$HOME_DIR/$platform")
+  done
+fi
+
+# Validate every target container up front, before any deletion or copy, so
 # a blocking path in one platform never causes partial mutation of another.
-for platform in $PLATFORM_NAMES; do
-  platform_root="$HOME_DIR/$platform"
-  [ -d "$platform_root" ] || continue
-  platform_skills="$platform_root/skills"
-  if is_blocking_file "$platform_skills"; then
-    fail "platform skills path is not a directory: $platform_skills"
+for target in "${targets[@]}"; do
+  [ -d "$target" ] || continue
+  target_skills="$target/skills"
+  if is_blocking_file "$target_skills"; then
+    fail "platform skills path is not a directory: $target_skills"
   fi
-  platform_agents="$platform_root/agents"
-  if is_blocking_file "$platform_agents"; then
-    fail "platform agents path is not a directory: $platform_agents"
+  if [ "$ship_agents" -eq 1 ]; then
+    target_agents="$target/agents"
+    if is_blocking_file "$target_agents"; then
+      fail "platform agents path is not a directory: $target_agents"
+    fi
   fi
 done
 
@@ -137,16 +173,17 @@ remove_legacy_into() {
   done
 }
 
-for platform in $PLATFORM_NAMES; do
-  platform_root="$HOME_DIR/$platform"
-  if [ ! -d "$platform_root" ]; then
-    printf 'skip %s (platform root missing)\n' "$platform_root"
+for target in "${targets[@]}"; do
+  if [ ! -d "$target" ]; then
+    printf 'skip %s (platform root missing)\n' "$target"
     continue
   fi
 
-  remove_legacy_into "$platform_root"
-  install_skills_into "$platform_root"
-  install_agents_into "$platform_root"
+  remove_legacy_into "$target"
+  install_skills_into "$target"
+  if [ "$ship_agents" -eq 1 ]; then
+    install_agents_into "$target"
+  fi
 done
 
 printf 'done: installed paired skills from %s\n' "$SCRIPT_DIR"
