@@ -139,6 +139,14 @@ class DocumentationContractTest(unittest.TestCase):
             shared.INIT_COMMIT,
         )
 
+    def test_documents_init_drift_check(self) -> None:
+        self.assert_readme_contains(
+            shared.INIT_DRIFT_CHECK,
+            shared.INIT_DRIFT_UPDATE_CONSENT,
+            shared.INIT_DRIFT_NO_UPDATE,
+            shared.INIT_UPDATE_COMMIT,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

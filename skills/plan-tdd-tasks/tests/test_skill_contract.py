@@ -147,6 +147,19 @@ class PlanTddTasksContractTest(unittest.TestCase):
             shared.INIT_COMMIT,
         )
 
+    def test_init_drift_check_and_update(self) -> None:
+        self.assert_all(
+            shared.INIT_DRIFT_CHECK,
+            shared.INIT_DRIFT_UPDATE_CONSENT,
+            shared.INIT_DRIFT_REFUSE_SKIP,
+            shared.INIT_DRIFT_MECHANICAL,
+            shared.INIT_DRIFT_NO_STYLE,
+            shared.INIT_DRIFT_NO_UPDATE,
+            shared.INIT_DRIFT_TABLE_ROW,
+            shared.INIT_UPDATE_COMMIT,
+        )
+        self.assertNotIn("跳过生成并报告（漂移更新仍在任务流程", SKILL)
+
 
 if __name__ == "__main__":
     unittest.main()

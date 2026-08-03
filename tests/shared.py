@@ -82,6 +82,19 @@ INIT_PERMISSION = "Read(<PROJECT_ROOT>/**)"
 INIT_COMMIT = "chore: init project-map"
 INIT_EXCEPTION = "§12 init 收尾提交"
 
+# init 漂移判定 markers — an existing project-map.md is drift-checked instead
+# of skipped-and-reported; consent gates the update; the update uses a distinct
+# closing commit message. One constant per behavior phrase asserted in the
+# contract tests, so every AC-asserted string is anchored in a test.
+INIT_DRIFT_CHECK = "漂移判定"
+INIT_DRIFT_UPDATE_CONSENT = "经用户同意后更新"
+INIT_DRIFT_REFUSE_SKIP = "拒绝则跳过并报告"
+INIT_DRIFT_MECHANICAL = "机械可验证"
+INIT_DRIFT_NO_STYLE = "风格性改写"
+INIT_DRIFT_NO_UPDATE = "无需更新"
+INIT_DRIFT_TABLE_ROW = "更新时机（init）"
+INIT_UPDATE_COMMIT = "chore: update project-map"
+
 # Installer targets and legacy removal.
 PLATFORMS = (".claude", ".claudeD", ".claudeP")
 AGENT_NAMES = SKILL_NAMES
