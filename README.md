@@ -133,6 +133,17 @@ cd agent-dev-workflow
 
 （其他平台根同理）。Claude Code 安装新增 definitions 后需启动新会话或重启现有会话才会出现在 `/agents`。
 
+## 首次使用：初始化（`/plan-tdd-tasks init`）
+
+在业务仓库首次使用前，可运行 `/plan-tdd-tasks init` 做一次性初始化（**仅字面触发**；自然语言请求一律走正常任务流程）：
+
+1. 生成 `project-map.md`（若不存在，按 `plan-tdd-tasks` skill §11.3 判定项目形态、自判类别）；
+2. 经用户同意后，通过 `update-config` skill 在 `.claude/settings.local.json` 添加 `` `Read(<PROJECT_ROOT>/**)` `` 读权限（拒绝则跳过）；
+3. 机械校验 `.claude/settings.local.json` 已被 gitignore（未忽略时追加到仓库 `.gitignore`，防止后续任务的范围检查误判）；
+4. 展示将提交内容后一次 `chore: init project-map` commit 收尾，工作树保持 clean。
+
+init 不是任务，仅做初始化：无 AC 清单、无范围声明、无盲测、无 TDD，不写入 `.tmp/`；详见 `plan-tdd-tasks` skill §12。
+
 ## 验证
 
 仓库自测：

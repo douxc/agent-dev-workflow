@@ -39,6 +39,11 @@ class AgentDefinitionTest(unittest.TestCase):
             self.assertIn("model: inherit", text)
             self.assertTrue(text.rstrip().endswith("---") or "---\n" in text)
 
+    def test_main_agent_documents_init_mode(self) -> None:
+        text = self.read_agent(shared.MAIN_SKILL)
+        self.assertIn(shared.INIT_TRIGGER, text)
+        self.assertIn("SKILL.md §12", text)
+
 
 if __name__ == "__main__":
     unittest.main()

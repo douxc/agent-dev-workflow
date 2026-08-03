@@ -25,7 +25,7 @@ description: 单 feature 开发全流程主 agent：分析、规划（AC 清单�
 - 面向用户的自然语言使用简体中文；代码、标识符、命令与精确错误使用英文。
 - **一次只处理一个 feature**。用户提出多个需求时，先确认优先级，逐个执行。
 - **规划不落盘**：设计意图、实现思路、TDD 计划只存在于对话中，绝不写入任何文件。唯一落盘的规划产物是 AC 清单、范围声明与 test-command.txt（§4）。
-- 任务期间**不得执行 `git commit`，不得执行 `git add`/stage**（§9 最终提交是唯一例外）；不得 push。
+- 任务期间**不得执行 `git commit`，不得执行 `git add`/stage**（§9 最终提交与 §12 init 收尾提交是仅有的例外）；不得 push。
 - 任务开始前工作树必须 clean（`git status --porcelain` 为空）。非 clean 时先与用户确认基线：是并入本次任务还是先处理现有改动，确认前不开始。
 - 唯一临时目录：`${PROJECT_ROOT}/.tmp/<task-id>/`。任务开始前若存在同名残留，先与用户确认后删除。任务结束（含失败、放弃）后清理该目录。
 - `${SKILL_ROOT}` 是包含当前已加载 `SKILL.md` 的目录。本 skill 的脚本固定为 `${SKILL_ROOT}/scripts/check-scope.sh` 与 `${SKILL_ROOT}/scripts/run-full-tests.sh`，**以绝对路径调用**；禁止在业务仓库复制、改写或新建这两个脚本，禁止探索业务仓库中的同名文件。
@@ -198,3 +198,24 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 | 创建时机 | §3 分析结论确定时 | 文件不存在 | 按 §11.3 判定形态、自判类别，从仓库现状分析写入 → 列入范围声明 `infra:` |
 | 更新时机 | §3 分析期 / §9 提交前 | 分析发现地图与现状不符（漂移）；或本次任务修改了地图已记录主题（如新增 API、路由、组件） | 更新对应小节；§9 更新随本次 commit 一并提交 |
 | 不更新 | 任何失败/放弃路径 | §6 回退重规划、§8 双 fail 重修、§10 强制人工放弃、§9 全量 FAIL 重跑 | 不因失败任务更新地图；§3 已创建的现状描述保留（项目事实不因任务失败失效） |
+
+## 12. init 模式（初始化，非任务）
+
+`/plan-tdd-tasks init`（字面触发，skill args 恰为 `init`）进入初始化模式：为业务仓库做首次使用准备——生成 `project-map.md`（若不存在）与配置项目读权限。**init 不是任务**：无 AC 清单、无范围声明、无盲测、无 TDD、无 test-command.txt，不进入 §2–§10 任务纪律（`规划不落盘` 仍适用：init 同样不写设计意图），不使用 `.tmp/`；init 结束后工作树必须 clean。
+
+### 12.1 触发
+
+- **仅字面 `/plan-tdd-tasks init` 进入 init 模式**；其余任何调用（包括自然语言中含"初始化"字样的开发需求）一律走正常任务流程。
+- 收到含"初始化"但非字面触发的内容时，先与用户确认是否意图 init，再决定流程。
+
+### 12.2 前置
+
+- `git rev-parse --show-toplevel` 必须成功（PROJECT_ROOT 必须是 git 仓库）。
+- `project-map.md` 已存在时**跳过生成并报告**（漂移更新仍在任务流程 §3/§9）。
+
+### 12.3 步骤
+
+1. **生成 `project-map.md`**（若不存在）：按 §11.3 判定项目形态、自判类别，从仓库现状分析写入（复用 §11 的全部规则；`project-map.md` 不是盲测输入，无代码包）。
+2. **权限**：向用户展示规则文本 `` `Read(<PROJECT_ROOT>/**)` ``，**经用户同意后**调用 `update-config` skill 写入 `.claude/settings.local.json` 的 `permissions.allow`（复用既有 skill，不自行改写配置）；用户拒绝则跳过本步，其余步骤照常。
+3. **机械校验**：`git check-ignore .claude/settings.local.json`；未忽略时向仓库 `.gitignore` 追加该路径（防止后续任务的 `check-scope.sh` 将其判为 out-of-scope）。
+4. **收尾**：展示将提交内容（`project-map.md` + 可能的 `.gitignore` 变更）→ 一次 `chore: init project-map` commit → 汇报（地图生成/跳过、权限是否写入、commit sha）。settings.local.json 已被忽略、不进入提交。

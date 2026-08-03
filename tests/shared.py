@@ -73,6 +73,15 @@ REVIEW_DIR = "review"
 PROJECT_MAP = "project-map.md"
 PM_SECTIONS = ("架构", "选型", "前端路由", "后端 API", "公共组件", "API auth")
 
+# init 模式 markers — literal `/plan-tdd-tasks init` is the only init trigger;
+# the permission rule and the closing chore commit are init's distinguishing
+# behaviors. Full strings only, never the bare word "init" (substring hazard).
+INIT_TRIGGER = "/plan-tdd-tasks init"
+INIT_NOT_A_TASK = "init 不是任务"
+INIT_PERMISSION = "Read(<PROJECT_ROOT>/**)"
+INIT_COMMIT = "chore: init project-map"
+INIT_EXCEPTION = "§12 init 收尾提交"
+
 # Installer targets and legacy removal.
 PLATFORMS = (".claude", ".claudeD", ".claudeP")
 AGENT_NAMES = SKILL_NAMES

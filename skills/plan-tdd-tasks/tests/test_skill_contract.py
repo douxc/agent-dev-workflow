@@ -134,10 +134,18 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assertNotIn("无 project map", SKILL)
 
     def test_cross_reference_corrections(self) -> None:
-        self.assertIn("§9 最终提交是唯一例外", SKILL)
+        self.assertIn("§9 最终提交与 §12 init 收尾提交是仅有的例外", SKILL)
         self.assertIn("全量留给 §9", SKILL)
         self.assertNotIn("§8 最终提交", SKILL)
         self.assertNotIn("全量留给 §7", SKILL)
+
+    def test_init_mode_markers(self) -> None:
+        self.assert_all(
+            shared.INIT_TRIGGER,
+            shared.INIT_NOT_A_TASK,
+            shared.INIT_PERMISSION,
+            shared.INIT_COMMIT,
+        )
 
 
 if __name__ == "__main__":

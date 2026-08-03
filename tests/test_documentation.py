@@ -131,6 +131,14 @@ class DocumentationContractTest(unittest.TestCase):
         self.assertIn("└── full-tests.log", self.readme)
         self.assertNotIn("仅分歧时）, full-tests.log", self.readme)
 
+    def test_documents_init_mode(self) -> None:
+        self.assert_readme_contains(
+            shared.INIT_TRIGGER,
+            shared.INIT_NOT_A_TASK,
+            shared.INIT_PERMISSION,
+            shared.INIT_COMMIT,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
