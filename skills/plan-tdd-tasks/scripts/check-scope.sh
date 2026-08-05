@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
-set -eu
+set -eo pipefail
 
 die() {
     printf 'error: %s\n' "$*" >&2
@@ -50,7 +50,18 @@ git -C "$root" rev-parse --verify "$base^{commit}" >/dev/null 2>&1 ||
 
 # Declared set: `- ` items under the `files:` and `infra:` sections. Any other
 # marker line (task:, base:, 约束:, ...) ends the current section.
-declared=$(awk '
+declared=()
+while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    duplicate=0
+    for item in "${declared[@]}"; do
+        if [ "$item" = "$path" ]; then
+            duplicate=1
+            break
+        fi
+    done
+    [ "$duplicate" -eq 1 ] || declared+=("$path")
+done < <(awk '
 /^files:$/ { section = "files"; next }
 /^infra:$/ { section = "infra"; next }
 /^[^[:space:]]+:/ { section = ""; next }
@@ -61,51 +72,70 @@ declared=$(awk '
     }
 }
 ' "$scope_path")
-[ -n "$declared" ] || die "scope file has no files: section: $scope_path"
+[ "${#declared[@]}" -gt 0 ] ||
+    die "scope file has no files: section: $scope_path"
 
-tmpdir=$(mktemp -d)
-trap 'rm -rf "$tmpdir"' EXIT
-
-# Changed set: working-tree diff vs base (includes staged) plus untracked,
-# minus anything under .tmp/ unconditionally (defense in depth).
-{
-    git -C "$root" diff --name-only "$base"
-    git -C "$root" ls-files --others --exclude-standard
-} | sort -u | while IFS= read -r path; do
+# Git paths are NUL-delimited so quoting, Unicode, whitespace, and embedded
+# newlines cannot change path identity. Bash is required for NUL-safe `read`.
+changed=()
+while IFS= read -r -d '' path; do
     case "$path" in
-        .tmp | .tmp/*) ;;
-        *) printf '%s\n' "$path" ;;
+        .tmp | .tmp/*) continue ;;
     esac
-done >"$tmpdir/changed"
-
-printf '%s\n' "$declared" | sort -u >"$tmpdir/declared"
+    duplicate=0
+    for item in "${changed[@]}"; do
+        if [ "$item" = "$path" ]; then
+            duplicate=1
+            break
+        fi
+    done
+    [ "$duplicate" -eq 1 ] || changed+=("$path")
+done < <(
+    git -C "$root" diff --name-only -z "$base"
+    git -C "$root" ls-files --others --exclude-standard -z
+)
 
 # Staged changes are already in the changed set; surface them as a warning.
-git -C "$root" diff --cached --name-only "$base" | sort -u |
-    while IFS= read -r path; do
-        case "$path" in
-            .tmp | .tmp/*) ;;
-            *) printf 'staged: %s\n' "$path" ;;
-        esac
-    done
+while IFS= read -r -d '' path; do
+    case "$path" in
+        .tmp | .tmp/*) continue ;;
+    esac
+    printf 'staged: %s\n' "$path"
+done < <(git -C "$root" diff --cached --name-only -z "$base")
 
-comm -23 "$tmpdir/changed" "$tmpdir/declared" >"$tmpdir/out-of-scope"
-if [ -s "$tmpdir/out-of-scope" ]; then
-    while IFS= read -r path; do
+out_of_scope=()
+for path in "${changed[@]}"; do
+    found=0
+    for item in "${declared[@]}"; do
+        if [ "$item" = "$path" ]; then
+            found=1
+            break
+        fi
+    done
+    [ "$found" -eq 1 ] || out_of_scope+=("$path")
+done
+
+if [ "${#out_of_scope[@]}" -gt 0 ]; then
+    for path in "${out_of_scope[@]}"; do
         printf 'out-of-scope %s\n' "$path"
-    done <"$tmpdir/out-of-scope"
-    count=$(wc -l <"$tmpdir/out-of-scope" | tr -d ' ')
-    printf 'scope-check: FAIL (%s out-of-scope files)\n' "$count"
+    done
+    printf 'scope-check: FAIL (%s out-of-scope files)\n' \
+        "${#out_of_scope[@]}"
     exit 1
 fi
 
 # Declared but unchanged — informational only.
-comm -13 "$tmpdir/changed" "$tmpdir/declared" | while IFS= read -r path; do
-    printf 'unchanged %s\n' "$path"
+for path in "${declared[@]}"; do
+    found=0
+    for item in "${changed[@]}"; do
+        if [ "$item" = "$path" ]; then
+            found=1
+            break
+        fi
+    done
+    [ "$found" -eq 1 ] || printf 'unchanged %s\n' "$path"
 done
 
-changed_count=$(wc -l <"$tmpdir/changed" | tr -d ' ')
-declared_count=$(wc -l <"$tmpdir/declared" | tr -d ' ')
 printf 'scope-check: PASS (%s changed, %s declared)\n' \
-    "$changed_count" "$declared_count"
+    "${#changed[@]}" "${#declared[@]}"
 exit 0

@@ -52,8 +52,14 @@ else
 fi
 
 if [ -n "$log_file" ]; then
-    log_dir=$(dirname "$log_file")
+    case "$log_file" in
+        /*) log_path=$log_file ;;
+        *) log_path=$root/$log_file ;;
+    esac
+    log_dir=$(dirname "$log_path")
     [ -d "$log_dir" ] || die "log file directory does not exist: $log_dir"
+    log_dir=$(CDPATH= cd -P "$log_dir" && pwd -P)
+    log_file=$log_dir/$(basename "$log_path")
 fi
 
 cd "$run_dir"

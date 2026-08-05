@@ -73,6 +73,17 @@ class PlanTddTasksContractTest(unittest.TestCase):
             "传递任何设计意图",
         )
 
+    def test_host_specific_blind_dispatch(self) -> None:
+        self.assert_all(
+            "Claude Code",
+            shared.HERMES_DELEGATE_TASK,
+            shared.HERMES_BLIND_READONLY,
+            shared.TRANSPORT_UNAVAILABLE,
+            shared.TRANSPORT_FAIL_CLOSED,
+            shared.TRANSPORT_STOP,
+            shared.TRANSPORT_FAIL_CLOSED_RULE,
+        )
+
     def test_disagreement_handling(self) -> None:
         self.assert_all(
             "双 fail",
@@ -145,6 +156,12 @@ class PlanTddTasksContractTest(unittest.TestCase):
             shared.INIT_NOT_A_TASK,
             shared.INIT_PERMISSION,
             shared.INIT_COMMIT,
+        )
+
+    def test_init_update_config_unavailable_is_non_blocking(self) -> None:
+        self.assert_all(
+            shared.UPDATE_CONFIG_UNAVAILABLE,
+            "继续其余步骤",
         )
 
     def test_init_drift_check_and_update(self) -> None:

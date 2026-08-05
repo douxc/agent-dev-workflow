@@ -113,7 +113,12 @@ class DocumentationContractTest(unittest.TestCase):
             "python3 -m unittest discover -s skills/plan-tdd-tasks/tests -p 'test_*.py'",
             "python3 -m unittest discover -s skills/blind-review-tasks/tests -p 'test_*.py'",
             "bash -n install.sh",
+            "bash -n skills/plan-tdd-tasks/scripts/check-scope.sh",
             "git diff --check",
+        )
+        self.assertNotIn(
+            "\nsh -n skills/plan-tdd-tasks/scripts/check-scope.sh",
+            self.readme,
         )
 
     def test_documents_project_map(self) -> None:
@@ -154,6 +159,15 @@ class DocumentationContractTest(unittest.TestCase):
             shared.INSTALL_PROFILE_EXCLUSIVE,
             shared.HERMES_BLIND_READONLY,
             shared.HERMES_DELEGATE_TASK,
+            shared.TRANSPORT_UNAVAILABLE,
+            shared.TRANSPORT_FAIL_CLOSED,
+            shared.TRANSPORT_STOP,
+        )
+
+    def test_documents_optional_update_config_dependency(self) -> None:
+        self.assert_readme_contains(
+            "无硬运行时依赖",
+            shared.UPDATE_CONFIG_UNAVAILABLE,
         )
 
 

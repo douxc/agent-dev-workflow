@@ -82,6 +82,29 @@ class RunFullTestsTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, shared.EXIT_PASS)
 
+    def test_relative_log_file_is_resolved_from_project_root(self) -> None:
+        workdir = self.temp / "workdir"
+        workdir.mkdir()
+        project_log_dir = self.project / "logs"
+        project_log_dir.mkdir()
+        project_log = project_log_dir / "full-tests.log"
+
+        result = self.run_script(
+            shared.FLAG_PROJECT_ROOT, str(self.project),
+            shared.FLAG_TEST_CMD, "printf 'relative log\\n'",
+            shared.FLAG_WORKDIR, str(workdir),
+            shared.FLAG_LOG_FILE, "logs/full-tests.log",
+        )
+
+        self.assertEqual(
+            result.returncode,
+            shared.EXIT_PASS,
+            msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+        )
+        self.assertEqual(project_log.read_text(encoding="utf-8"),
+                         "relative log\n")
+        self.assertFalse((workdir / "logs" / "full-tests.log").exists())
+
     def test_log_file_captures_output_and_status_is_last(self) -> None:
         log_file = self.temp / "log" / "full-tests.log"
         log_file.parent.mkdir()

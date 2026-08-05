@@ -69,6 +69,21 @@ class CheckScopeTest(unittest.TestCase):
         self.assertIn(shared.SCOPE_CHECK_PASS, result.stdout)
         self.assertIn("(2 changed, 2 declared)", result.stdout)
 
+    def test_unicode_space_and_tab_path_is_matched_exactly(self) -> None:
+        unusual = "中文 file\tname.txt"
+        write_scope(self.scope, (unusual,))
+        (self.repo / unusual).write_text("new\n", encoding="utf-8")
+
+        result = self.run_script(*self.default_args(self.scope))
+
+        self.assertEqual(
+            result.returncode,
+            shared.EXIT_PASS,
+            msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+        )
+        self.assertIn(shared.SCOPE_CHECK_PASS, result.stdout)
+        self.assertIn("(1 changed, 1 declared)", result.stdout)
+
     def test_out_of_scope_modified_file_fails(self) -> None:
         write_scope(self.scope, ("tracked.txt",))
         (self.repo / "tracked.txt").write_text("modified\n", encoding="utf-8")

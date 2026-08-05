@@ -123,7 +123,11 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 
 ## 7. 盲测派发
 
-- 在**同一条消息**中并行派发两个 `Agent(blind-review-tasks)` 子代理（全新上下文，互不共享）。
+- 先按当前宿主选择原生子代理传输，不得混用：
+  - **Claude Code**：在**同一条消息**中并行派发两个 `Agent(blind-review-tasks)` custom agent。
+  - **Hermes**：在同一轮中并行发起两个 `delegate_task` child；每个 child 的任务开头要求加载 `blind-review-tasks` skill，并严格遵守其静态只读规则。Hermes child 继承父代理 toolsets，盲测者只读是**指令约束而非 harness 强制**，即使写入或执行工具可见也不得使用。
+  - 当前宿主传输不可用、无法创建两个全新上下文或无法认证结果来源时 **fail closed**：停止流程并向用户报告，不得在主上下文中冒充盲测者。
+- 两个子代理必须并行、使用全新上下文且互不共享。
 - 每个子代理的 prompt 只包含：package 绝对路径 + PROJECT_ROOT（仅作只读上下文）+ 一句话指令"按已加载的 blind-review-tasks skill 输出 verdict"。
 - **不得**在 prompt 中传递任何设计意图、实现思路或"我认为实现是对的"之类的立场。
 - 子代理的最终输出即 verdict；分别保存到 `${PROJECT_ROOT}/.tmp/<task-id>/review/A.md` 与 `review/B.md`。
@@ -219,6 +223,6 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 1. **生成或更新 `project-map.md`**：
    - 不存在 → 按 §11.3 判定项目形态、自判类别，从仓库现状分析写入（复用 §11 的全部规则；`project-map.md` 不是盲测输入，无代码包）。
    - 已存在 → **漂移判定**：核对地图记录的机械可验证现状事实（路径、命令、结构、选型、存在性）是否与仓库现状一致；只更新实际存在差异的小节，不做风格性改写；准入标准沿用 §11.1。无漂移 → 报告"地图最新，无需更新"，不询问；有漂移 → 向用户展示拟更新小节与理由，**经用户同意后更新**，拒绝则跳过并报告。
-2. **权限**：向用户展示规则文本 `` `Read(<PROJECT_ROOT>/**)` ``，**经用户同意后**调用 `update-config` skill 写入 `.claude/settings.local.json` 的 `permissions.allow`（复用既有 skill，不自行改写配置）；用户拒绝则跳过本步，其余步骤照常。
+2. **权限**：向用户展示规则文本 `` `Read(<PROJECT_ROOT>/**)` ``，**经用户同意后**调用 `update-config` skill 写入 `.claude/settings.local.json` 的 `permissions.allow`（复用既有 skill，不自行改写配置）；用户拒绝则跳过本步。`update-config` 是可选宿主能力而非硬依赖；同意后若该 skill 不可用，精确报告 `update-config unavailable; permission step skipped`，跳过权限写入并继续其余步骤。
 3. **机械校验**：`git check-ignore .claude/settings.local.json`；未忽略时向仓库 `.gitignore` 追加该路径（防止后续任务的 `check-scope.sh` 将其判为 out-of-scope）。
 4. **收尾**：展示将提交内容（`project-map.md` + 可能的 `.gitignore` 变更）→ 一次 commit（地图生成为 `chore: init project-map`，地图更新为 `chore: update project-map`）→ 汇报（地图生成/更新/跳过、权限是否写入、commit sha）。settings.local.json 已被忽略、不进入提交。

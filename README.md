@@ -1,6 +1,6 @@
 # agent-dev-workflow
 
-一套面向 Claude Code 的单 feature 开发任务协作 skill bundle，由两个必须成对安装的 skill 组成：
+一套面向 Claude Code、支持 Hermes profile 的单 feature 开发任务协作 skill bundle，由两个必须成对安装的 skill 组成：
 
 - `plan-tdd-tasks` —— 唯一面向用户的开发入口与全流程主 agent：分析 → 规划（AC 清单 + 范围声明）→ TDD 实现与自测 → 产出包 → 机械范围检查 → 并行盲测 ×2 → 分歧处理 → 全量测试 → 提交。
 - `blind-review-tasks` —— 纯只读、无执行环境的静态盲审复核者：只依据 AC 清单、代码包、测试与范围声明做独立 code review，输出结构化 verdict。只由 `plan-tdd-tasks` 并行派发。
@@ -88,7 +88,7 @@ infra:
 check-scope.sh --project-root <dir> --scope-file <path> [--base <rev>]
 ```
 
-changed = 工作树 diff vs base ∪ 未跟踪文件，减掉 `.tmp/` 下所有路径（无条件排除）。越界文件逐行输出 `out-of-scope <path>`，末行状态：
+changed = 工作树 diff vs base ∪ 未跟踪文件，减掉 `.tmp/` 下所有路径（无条件排除）。脚本使用 Git NUL 分隔路径，Unicode、空格、制表符等文件名按原始字节精确匹配；因此该脚本要求 bash。越界文件逐行输出 `out-of-scope <path>`，末行状态：
 
 | 退出码 | 状态行 |
 |---|---|
@@ -102,7 +102,7 @@ changed = 工作树 diff vs base ∪ 未跟踪文件，减掉 `.tmp/` 下所有�
 run-full-tests.sh --project-root <dir> --test-cmd <string> [--workdir <dir>] [--log-file <path>]
 ```
 
-`--test-cmd` 经 `sh -c` 执行（"全量"由主 agent 分析期确定并写入 `test-command.txt`，规则：必须覆盖仓库完整测试套件，禁止只跑新增测试）。输出与日志一致，末行状态：
+`--test-cmd` 经 `sh -c` 执行（"全量"由主 agent 分析期确定并写入 `test-command.txt`，规则：必须覆盖仓库完整测试套件，禁止只跑新增测试）。相对 `--log-file` 始终以 `--project-root` 为基准解析，不受 `--workdir` 影响。输出与日志一致，末行状态：
 
 | 退出码 | 状态行 |
 |---|---|
@@ -122,7 +122,7 @@ cd agent-dev-workflow
 
 安装器**自动移除旧版遗留**（`skills/plan-dev-tasks`、`skills/dev-with-tdd` 及其 agent 文件），不触碰其他任何 skill、agent 或配置。所有校验（HOME、源文件、平台容器）在首次删除前完成；容器若是普通文件而非目录则 fail closed。未知参数报错。
 
-`install.sh -p <profile>`（**互斥**模式，与 Claude 平台安装二选一）安装到 Hermes 命名 profile（`~/.hermes/profiles/<profile>/`）：只分发两个 skill（Hermes 无 .md agent 机制，子代理经 `delegate_task` 运行时定义），不触碰 Claude 平台；profile 目录不存在时输出 `skip`，不会代为创建。
+`install.sh -p <profile>`（**互斥**模式，与 Claude 平台安装二选一）安装到 Hermes 命名 profile（`~/.hermes/profiles/<profile>/`）：只分发两个 skill（Hermes 无 .md agent 机制，子代理经 `delegate_task` 运行时定义），不触碰 Claude 平台；profile 目录不存在时输出 `skip`，不会代为创建。主 skill 按宿主选择 Claude Code `Agent(blind-review-tasks)` 或 Hermes `delegate_task`；宿主传输不可用、无法创建两个全新上下文或无法认证结果来源时 fail closed，即停止流程。
 
 **卸载**：手动删除两个 skill 目录与两个 agent 文件：
 
@@ -140,7 +140,7 @@ cd agent-dev-workflow
 在业务仓库首次使用前，可运行 `/plan-tdd-tasks init` 做一次性初始化（**仅字面触发**；自然语言请求一律走正常任务流程）：
 
 1. 生成 `project-map.md`（若不存在，按 `plan-tdd-tasks` skill §11.3 判定项目形态、自判类别）；已存在时做**漂移判定**（核对机械可验证的现状事实，不做风格性改写），无漂移则报告无需更新，有漂移**经用户同意后更新**；
-2. 经用户同意后，通过 `update-config` skill 在 `.claude/settings.local.json` 添加 `` `Read(<PROJECT_ROOT>/**)` `` 读权限（拒绝则跳过）；
+2. 经用户同意后，通过 `update-config` skill 在 `.claude/settings.local.json` 添加 `` `Read(<PROJECT_ROOT>/**)` `` 读权限（拒绝则跳过）；`update-config` 是可选宿主能力，本 bundle 无硬运行时依赖，skill 不可用时报告 `update-config unavailable; permission step skipped` 并继续其余步骤；
 3. 机械校验 `.claude/settings.local.json` 已被 gitignore（未忽略时追加到仓库 `.gitignore`，防止后续任务的范围检查误判）；
 4. 展示将提交内容后一次 commit 收尾（地图生成为 `chore: init project-map`，地图更新为 `chore: update project-map`），工作树保持 clean。
 
@@ -155,7 +155,7 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 python3 -m unittest discover -s skills/plan-tdd-tasks/tests -p 'test_*.py'
 python3 -m unittest discover -s skills/blind-review-tasks/tests -p 'test_*.py'
 bash -n install.sh
-sh -n skills/plan-tdd-tasks/scripts/check-scope.sh
+bash -n skills/plan-tdd-tasks/scripts/check-scope.sh
 sh -n skills/plan-tdd-tasks/scripts/run-full-tests.sh
 git diff --check
 ```
@@ -167,4 +167,4 @@ git diff --check
 - 脚本仅支持 macOS/Linux（bash/sh）。
 - 静态盲测无法捕获运行时错误——由最终全量测试兜底；盲测者之间可能相关性偏盲——由分歧自辩、人工仲裁与 2 轮上限兜底。
 - 盲测者只读由 agent 定义的 `tools: Read, Grep, Glob` 在 harness 层强制；旧版 hooks 强制层不在本设计内（如需可作未来可选加固）。
-- Hermes 平台：`install.sh -p <profile>` 互斥安装到命名 profile；`delegate_task` 子代理继承父代理 toolsets（无只读参数），盲测者只读为**指令约束而非 harness 强制**，留待 VPS 实测。
+- Hermes 平台：`install.sh -p <profile>` 互斥安装到命名 profile；主 skill 并行使用两个 `delegate_task` child，子代理继承父代理 toolsets（无只读参数），盲测者只读为**指令约束而非 harness 强制**，留待 VPS 实测。

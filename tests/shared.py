@@ -108,3 +108,13 @@ HERMES_PROFILES_DIR = ".hermes/profiles"
 INSTALL_PROFILE_EXCLUSIVE = "互斥"
 HERMES_BLIND_READONLY = "指令约束而非 harness 强制"
 HERMES_DELEGATE_TASK = "delegate_task"
+TRANSPORT_UNAVAILABLE = "宿主传输不可用"
+TRANSPORT_FAIL_CLOSED = "fail closed"
+TRANSPORT_STOP = "停止流程"
+TRANSPORT_FAIL_CLOSED_RULE = (
+    "宿主传输不可用、无法创建两个全新上下文或无法认证结果来源时 "
+    "**fail closed**：停止流程"
+)
+UPDATE_CONFIG_UNAVAILABLE = (
+    "update-config unavailable; permission step skipped"
+)
