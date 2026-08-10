@@ -72,6 +72,20 @@ class DocumentationContractTest(unittest.TestCase):
             shared.SCOPE_MARKER_INFRA,
             "实现前写定，事后禁止修补",
             "先回退越界改动",
+            shared.SCOPE_ACCIDENTAL,
+            shared.SCOPE_EXPANSION,
+        )
+
+    def test_documents_deduplicated_failure_paths(self) -> None:
+        self.assert_readme_contains(
+            shared.SCOPE_BEFORE_PACKAGE,
+            shared.FULL_FAIL_PACKAGE_CHANGE,
+            shared.FULL_FAIL_NO_PACKAGE_CHANGE,
+            shared.PROJECT_MAP_INIT_HINT,
+            shared.PROJECT_MAP_NO_GLOBAL_DRIFT,
+            shared.INIT_REFERENCE,
+            shared.FINAL_SCOPE_RECHECK,
+            shared.ENV_RETRY_CAP,
         )
 
     def test_documents_script_interfaces_and_exit_codes(self) -> None:

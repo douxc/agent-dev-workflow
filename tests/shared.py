@@ -118,3 +118,18 @@ TRANSPORT_FAIL_CLOSED_RULE = (
 UPDATE_CONFIG_UNAVAILABLE = (
     "update-config unavailable; permission step skipped"
 )
+
+# Workflow de-duplication markers.
+SCOPE_BEFORE_PACKAGE = "先运行机械范围检查"
+PACKAGE_BUILD = "生成 `diff.txt`"
+SCOPE_ACCIDENTAL = "偶发且非必要的越界"
+SCOPE_EXPANSION = "实现确实需要扩大范围"
+FULL_FAIL_PACKAGE_CHANGE = "代码、测试、AC 或 scope 发生变化"
+FULL_FAIL_NO_PACKAGE_CHANGE = "只有环境或测试命令变化且代码包未变"
+PROJECT_MAP_INIT_HINT = "只提示运行 `/plan-tdd-tasks init`"
+PROJECT_MAP_NO_GLOBAL_DRIFT = "不执行全局漂移判定"
+INIT_REFERENCE = "references/init.md"
+RED_CAUSE = "确认失败原因是行为缺失"
+RED_RECORD = "记录命令与失败原因"
+FINAL_SCOPE_RECHECK = "再次运行 §6 的 check-scope.sh"
+ENV_RETRY_CAP = "环境或测试命令修复最多重试 2 次"

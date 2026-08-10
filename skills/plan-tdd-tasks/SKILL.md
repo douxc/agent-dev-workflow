@@ -1,21 +1,21 @@
 ---
 name: plan-tdd-tasks
-description: 单 feature 开发全流程主 agent：分析、规划（AC 清单与范围声明）、TDD 实现与自测、产出包、机械范围检查、并行盲测复核、分歧处理、全量测试与提交。用户描述一个开发需求时使用；一次只处理一个 feature。
+description: 单 feature 开发全流程主 agent：分析、规划（AC 清单与范围声明）、TDD 实现与自测、机械范围检查、产出包、并行盲测复核、分歧处理、全量测试与提交。用户描述一个开发需求时使用；一次只处理一个 feature。
 ---
 
 # 单 Feature 全流程：分析 → 规划 → TDD → 盲测 → 全量
 
-本 skill 是单个 feature 开发任务的唯一执行者。所有工作在同一个会话中完成：分析、规划、TDD 实现与自测、产出包、机械范围检查、并行盲测、分歧处理、全量测试与提交。本 skill 无状态机、无版本号、无 gates；稳定性来自 AC 清单的质量、范围声明的机械检查与两个全新上下文的盲测者。本 skill 在业务仓库维护的唯一持久化项目元数据是 `${PROJECT_ROOT}/project-map.md`（§11）——它是项目的索引（地图），不承载任何规划状态。
+本 skill 是单个 feature 开发任务的唯一执行者。所有工作在同一个会话中完成：分析、规划、TDD 实现与自测、机械范围检查、产出包、并行盲测、分歧处理、全量测试与提交。本 skill 无状态机、无版本号、无 gates；稳定性来自 AC 清单的质量、范围声明的机械检查与两个全新上下文的盲测者。本 skill 在业务仓库维护的唯一持久化项目元数据是 `${PROJECT_ROOT}/project-map.md`（§11）——它是项目的索引（地图），不承载任何规划状态。
 
 ## 1. 流程总览
 
 ```text
 ① 分析 → ② 规划（AC 清单 + 范围声明 + test-command.txt）→ ③ TDD 实现与自测
-→ ④ 产出包 + check-scope.sh 机械范围检查
-→ ⑤ 盲测 ×2（并行、只读、全新上下文）
-→ ⑥ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工）
-→ ⑦ run-full-tests.sh 全量测试（最后、1 遍）
-→ ⑧ git add 范围内文件 + 一次 commit → 清理 → 汇报
+→ ④ check-scope.sh 机械范围检查 → ⑤ 产出包
+→ ⑥ 盲测 ×2（并行、只读、全新上下文）
+→ ⑦ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工）
+→ ⑧ run-full-tests.sh 全量测试（每次尝试最后、1 遍）
+→ ⑨ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
 ```
 
 重跑上限：盲测最多 2 轮，超限强制人工（§10）。
@@ -34,10 +34,10 @@ description: 单 feature 开发全流程主 agent：分析、规划（AC 清单�
 
 1. 确定 `PROJECT_ROOT`：`git rev-parse --show-toplevel`。
 2. 读取仓库指令（README、CONTRIBUTING 等）与项目结构，理解 feature 的落点。
-3. 读取 `${PROJECT_ROOT}/project-map.md`（若存在，§11）：它是项目的索引，让 agent 快速熟悉项目、确认变更文件，辅助落点判断与测试命令推断。
+3. 读取 `${PROJECT_ROOT}/project-map.md`（若存在，§11）：它是项目的索引，让 agent 快速熟悉项目、确认变更文件，辅助落点判断与测试命令推断。文件不存在时只提示运行 `/plan-tdd-tasks init` 并继续当前任务；普通任务不创建地图。
 4. **确定全量测试命令**：从 README、`package.json` scripts、`pyproject.toml`、Makefile 或既有测试目录推断仓库的完整测试套件命令；推断不出时直接询问用户。该命令稍后写入 `test-command.txt`，规则：**必须覆盖仓库完整测试套件，禁止只跑新增测试**；可以是复合命令（如 `python3 -m unittest discover && npm test`）。
 5. 记录 `base = HEAD`（当前提交 sha，范围检查基线）。
-6. 分析结论（目标、落点、测试命令、风险）只在对话中呈现，不落盘。若 project-map.md 不存在，按 §11.4 创建；若其内容与仓库现状不符（漂移），按 §11.4 更新。创建或更新后必须将其列入范围声明 `infra:`（§4.2）。
+6. 分析结论（目标、落点、测试命令、风险）只在对话中呈现，不落盘。普通任务不执行全局漂移判定；仅在本次 feature 改变地图已记录主题时按 §11.4 更新对应小节。
 
 ## 4. 规划
 
@@ -83,7 +83,7 @@ infra:
 - `files:`：正授权清单，机械可执行。`infra:`：无 AC 断言的合理触碰项（配置、工具文件）。二者合计是 `check-scope.sh` 的声明集。
 - `约束:`：对主 agent 的咨询性负约束，不机械执行。
 - **范围声明一旦写出，不得事后修补以匹配实际改动**；发现需要扩大范围时按 §6 先回退再重新规划。
-- 若本次任务创建或更新了 project-map.md（§11），必须将其列入 `infra:`（项目元数据，无 AC 断言）。
+- 若本次任务更新既有 project-map.md（§11），必须将其列入 `infra:`（项目元数据，无 AC 断言）。
 
 ### 4.3 测试命令（`test-command.txt`）
 
@@ -91,12 +91,24 @@ infra:
 
 ## 5. TDD 实现与自测
 
-- 严格 Red-Green-Refactor：先写一个因行为缺失而失败（Red）的测试，记录命令与失败原因；再最小实现使其通过（Green）；仅在结构收益明确时重构，保持测试全绿。
+- 严格 Red-Green-Refactor：先写一个失败测试并确认失败原因是行为缺失（Red）；再最小实现使其通过（Green）；仅在结构收益明确时重构，保持测试全绿。
 - 迭代期间只运行**定向测试**（正在写的那个或邻近的测试），不跑全量；全量留给 §9。
-- 不得为通过而削弱测试、不得删除失败的测试、不得伪造 Red 记录。
+- 不得为通过而削弱测试、不得删除失败的测试、不得跳过 Red 阶段。
 - 实现只落在范围声明 `files:` + `infra:` 内的文件。
 
-## 6. 产出包与机械范围检查
+## 6. 机械范围检查与产出包
+
+1. **先运行机械范围检查**（绝对路径）：
+
+```text
+${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file <package>/scope.md --base <base>
+```
+
+- 退出码 0 = PASS：继续构建代码包。
+- 退出码 1 = FAIL：先判断越界性质，禁止直接修改 scope.md 追认实际改动。
+  - **偶发且非必要的越界**（日志、缓存、误编辑等）：删除新增文件或恢复误编辑，保持原 scope，重新运行本节范围检查；不重新规划、不重做已经完成的范围内实现。
+  - **实现确实需要扩大范围**：先回退越界改动，回到 §4 重新规划并更新受影响 AC，再重新实现；scope.md 与代码保持“先声明、后实现”。
+- 退出码 2 = 用法错误：修复参数或项目状态后重跑。
 
 产出包布局：
 
@@ -109,17 +121,10 @@ infra:
 └── code/                # 全部变更文件的完整副本（仓库相对布局）
 ```
 
-1. 生成 `diff.txt`（机械步骤）：`git diff <base>` 输出跟踪文件变更；对每个未跟踪新文件追加块 `== new: <path> ==` 加完整内容。`code/` 是盲测者的事实来源，`diff.txt` 仅作辅助。
+范围检查 PASS 后才执行以下步骤：
+
+1. 生成 `diff.txt`：`git diff <base>` 输出跟踪文件变更；对每个未跟踪新文件追加块 `== new: <path> ==` 加完整内容。`code/` 是盲测者的事实来源，`diff.txt` 仅作辅助。
 2. 构建 `code/`：将范围检查确认的变更文件逐一复制到 `code/` 下对应相对路径（project-map.md 除外——项目元数据，非盲测输入，不进入 `code/`，§11）。
-3. 运行机械范围检查（绝对路径）：
-
-```text
-${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file <package>/scope.md --base <base>
-```
-
-- 退出码 0 = PASS：继续。
-- 退出码 1 = FAIL（存在 `out-of-scope` 文件）：**先回退越界改动**（恢复被改文件、删除越界新增文件），然后**回到 §4 重新规划**（改写范围声明与受影响的 AC 归属），再重新实现。**禁止直接修改 scope.md 以匹配实际改动**；scope.md 与代码是"先有声明、后有实现"的关系。
-- 退出码 2 = 用法错误：检查参数与项目状态，修复后重跑。
 
 ## 7. 盲测派发
 
@@ -145,25 +150,28 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 
 ## 9. 全量测试与提交
 
-1. 双 pass 后运行全量测试（绝对路径，最后执行、恰好 1 遍）：
+1. 双 pass 后运行全量测试（绝对路径，每次尝试最后执行、恰好 1 遍）：
 
 ```text
 ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd "$(cat <package>/test-command.txt)" --log-file <package>/../full-tests.log
 ```
 
-2. `run-full-tests: PASS` 且范围检查仍为 PASS → 提交：
+2. `run-full-tests: PASS` 后进入提交收尾：
    - 若本次任务修改了 project-map.md 已记录的主题（§11.4 更新时机），先更新对应小节；
+   - 地图处理完成后，再次运行 §6 的 check-scope.sh；只有退出码 0 才继续，失败按 §6 分流；
    - `git add` 只加范围声明内的文件（`files:` + `infra:`）；
    - 一次 `git commit`，信息包含 task 名与 AC 范围；
    - 确认工作树 clean（`git status --porcelain` 为空，`.tmp/` 除外）。
 3. 清理 `${PROJECT_ROOT}/.tmp/<task-id>/`，向用户汇报：AC 清单、两份 verdict 摘要、全量结果、commit sha。
-4. 全量测试 FAIL：修复问题后**回到 §7 重新派发全新盲测者**（不得复用上一轮盲测者），轮次 +1，保留 `full-tests.log` 供诊断。全量失败不应通过扩大范围声明掩盖。
+4. 全量测试 FAIL：保留 `full-tests.log`，按修复是否改变盲审事实分流；全量失败不应通过扩大范围声明掩盖。
+   - **代码、测试、AC 或 scope 发生变化**：回到 §6 重新检查并产包，再到 §7 重新派发全新盲测者（不得复用上一轮），轮次 +1。
+   - **只有环境或测试命令变化且代码包未变**：保留上一轮双 PASS，修复环境或 `test-command.txt` 后直接重试本节全量测试，不消耗盲测轮次。环境或测试命令修复最多重试 2 次；连续失败后停止并转人工处理。
 
 ## 10. 重跑上限
 
 - 盲测重跑最多 **2 轮**：第 1 轮双 fail → 修复 → 第 2 轮；第 2 轮仍双 fail → **强制人工**：呈交两份 verdict 与修改摘要，由用户选择（继续修 / 接受现状 / 放弃任务）。超过上限自动停止，不得自行开始第 3 轮。
 - 任意一轮出现相左 → 按 §8 自辩后人工仲裁，仲裁结果不消耗重跑轮次。
-- 全量测试失败后的重派同样计入轮次上限。
+- 全量测试失败后，只有代码包事实变化而触发的重派计入轮次上限。
 
 ## 11. project-map.md（项目地图：项目的索引）
 
@@ -178,7 +186,7 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 ### 11.2 位置、版本控制与盲测隔离
 
 - 位置：`${PROJECT_ROOT}/project-map.md`（仓库根），随项目提交进 git；不放在 `.tmp/`。
-- 创建或更新 project-map.md 的任务必须将其列入范围声明 `infra:`（§4.2）；未声明即修改会被 check-scope 判为 out-of-scope（§6）。
+- 更新 project-map.md 的任务必须将其列入范围声明 `infra:`（§4.2）；未声明即修改会被 check-scope 判为 out-of-scope（§6）。
 - project-map.md 不复制进 `code/`（§6）；盲测者不读取 project-map.md，其判断只来自 AC 清单、范围声明与代码包。
 
 ### 11.3 内容与格式
@@ -199,30 +207,13 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 | 时机 | 环节 | 触发条件 | 动作 |
 |---|---|---|---|
 | 读取时机 | §3 步骤 3 | 文件存在 | 读取，作为项目索引，辅助定位 feature 落点与测试命令推断 |
-| 创建时机 | §3 分析结论确定时 | 文件不存在 | 按 §11.3 判定形态、自判类别，从仓库现状分析写入 → 列入范围声明 `infra:` |
-| 更新时机 | §3 分析期 / §9 提交前 | 分析发现地图与现状不符（漂移）；或本次任务修改了地图已记录主题（如新增 API、路由、组件） | 更新对应小节；§9 更新随本次 commit 一并提交 |
-| 更新时机（init） | §12 init 模式 | init 运行、地图已存在且漂移判定发现现状差异 | 经用户同意后更新对应小节，随 init 收尾 commit 提交 |
-| 不更新 | 任何失败/放弃路径 | §6 回退重规划、§8 双 fail 重修、§10 强制人工放弃、§9 全量 FAIL 重跑 | 不因失败任务更新地图；§3 已创建的现状描述保留（项目事实不因任务失败失效） |
+| 文件不存在 | §3 步骤 3 | 普通任务 | 只提示运行 `/plan-tdd-tasks init`，继续任务，不创建地图 |
+| 更新时机 | §9 提交前 | 本次任务修改了地图已记录主题（如新增 API、路由、组件） | 更新对应小节并列入 `infra:`，随本次 commit 提交 |
+| 创建与全局漂移判定 | §12 init 模式 | 字面 init 触发 | 按 `references/init.md` 执行 |
+| 不更新 | 任何失败/放弃路径 | §6 回退重规划、§8 双 fail 重修、§10 强制人工放弃、§9 全量 FAIL 重跑 | 不因失败任务更新地图 |
 
 ## 12. init 模式（初始化，非任务）
 
-`/plan-tdd-tasks init`（字面触发，skill args 恰为 `init`）进入初始化模式：为业务仓库做首次使用准备与后续维护——生成 `project-map.md`（若不存在）、对已存在的地图做漂移判定（§12.3）与配置项目读权限。**init 不是任务**：无 AC 清单、无范围声明、无盲测、无 TDD、无 test-command.txt，不进入 §2–§10 任务纪律（`规划不落盘` 仍适用：init 同样不写设计意图），不使用 `.tmp/`；init 结束后工作树必须 clean。
-
-### 12.1 触发
-
-- **仅字面 `/plan-tdd-tasks init` 进入 init 模式**；其余任何调用（包括自然语言中含"初始化"字样的开发需求）一律走正常任务流程。
-- 收到含"初始化"但非字面触发的内容时，先与用户确认是否意图 init，再决定流程。
-
-### 12.2 前置
-
-- `git rev-parse --show-toplevel` 必须成功（PROJECT_ROOT 必须是 git 仓库）。
-- `project-map.md` 已存在时**跳过生成**，按 §12.3 步骤 1 做**漂移判定**（任务流程 §3/§9 的漂移更新不受影响）。
-
-### 12.3 步骤
-
-1. **生成或更新 `project-map.md`**：
-   - 不存在 → 按 §11.3 判定项目形态、自判类别，从仓库现状分析写入（复用 §11 的全部规则；`project-map.md` 不是盲测输入，无代码包）。
-   - 已存在 → **漂移判定**：核对地图记录的机械可验证现状事实（路径、命令、结构、选型、存在性）是否与仓库现状一致；只更新实际存在差异的小节，不做风格性改写；准入标准沿用 §11.1。无漂移 → 报告"地图最新，无需更新"，不询问；有漂移 → 向用户展示拟更新小节与理由，**经用户同意后更新**，拒绝则跳过并报告。
-2. **权限**：向用户展示规则文本 `` `Read(<PROJECT_ROOT>/**)` ``，**经用户同意后**调用 `update-config` skill 写入 `.claude/settings.local.json` 的 `permissions.allow`（复用既有 skill，不自行改写配置）；用户拒绝则跳过本步。`update-config` 是可选宿主能力而非硬依赖；同意后若该 skill 不可用，精确报告 `update-config unavailable; permission step skipped`，跳过权限写入并继续其余步骤。
-3. **机械校验**：`git check-ignore .claude/settings.local.json`；未忽略时向仓库 `.gitignore` 追加该路径（防止后续任务的 `check-scope.sh` 将其判为 out-of-scope）。
-4. **收尾**：展示将提交内容（`project-map.md` + 可能的 `.gitignore` 变更）→ 一次 commit（地图生成为 `chore: init project-map`，地图更新为 `chore: update project-map`）→ 汇报（地图生成/更新/跳过、权限是否写入、commit sha）。settings.local.json 已被忽略、不进入提交。
+- 仅字面 `/plan-tdd-tasks init`（skill args 恰为 `init`）进入 init 模式；其他调用均走普通任务流程。
+- 触发后必须完整读取 `${SKILL_ROOT}/references/init.md` 并按其规则执行。
+- **init 不是任务**：无 AC、scope、盲测、TDD 或 `.tmp/` 产物；不进入 §2–§10，结束时工作树必须 clean。

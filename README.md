@@ -2,7 +2,7 @@
 
 一套面向 Claude Code、支持 Hermes profile 的单 feature 开发任务协作 skill bundle，由两个必须成对安装的 skill 组成：
 
-- `plan-tdd-tasks` —— 唯一面向用户的开发入口与全流程主 agent：分析 → 规划（AC 清单 + 范围声明）→ TDD 实现与自测 → 产出包 → 机械范围检查 → 并行盲测 ×2 → 分歧处理 → 全量测试 → 提交。
+- `plan-tdd-tasks` —— 唯一面向用户的开发入口与全流程主 agent：分析 → 规划（AC 清单 + 范围声明）→ TDD 实现与自测 → 机械范围检查 → 产出包 → 并行盲测 ×2 → 分歧处理 → 全量测试 → 提交。
 - `blind-review-tasks` —— 纯只读、无执行环境的静态盲审复核者：只依据 AC 清单、代码包、测试与范围声明做独立 code review，输出结构化 verdict。只由 `plan-tdd-tasks` 并行派发。
 
 哲学：**机械的脚本化，判断的留给人，盲测防自证，契约测试锁死**。与旧版（`plan-dev-tasks` / `dev-with-tdd`）的关系：旧架构（状态机、版本号、gates、协调器、hooks 强制层）已整体退役并删除；本仓库从零重建。
@@ -11,11 +11,11 @@
 
 ```text
 ① 主 agent 分析 → ② 规划（AC 清单 + 范围声明 + test-command.txt，规划不落盘）
-→ ③ TDD 实现与自测 → ④ 产出包 + check-scope.sh 机械范围检查
-→ ⑤ 盲测 ×2（并行、只读、全新上下文，输入只有 AC/代码/测试/范围声明）
-→ ⑥ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工仲裁）
-→ ⑦ run-full-tests.sh 全量测试（最后、恰好 1 遍）
-→ ⑧ git add 范围内文件 + 一次 commit → 清理 → 汇报
+→ ③ TDD 实现与自测 → ④ 先运行机械范围检查 → ⑤ 产出包
+→ ⑥ 盲测 ×2（并行、只读、全新上下文，输入只有 AC/代码/测试/范围声明）
+→ ⑦ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工仲裁）
+→ ⑧ run-full-tests.sh 全量测试（每次尝试最后、恰好 1 遍）
+→ ⑨ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
 ```
 
 重跑上限：盲测最多 2 轮，超限强制人工。
@@ -63,7 +63,11 @@ infra:
 - 不修改 src/legacy/* 下任何文件
 ```
 
-`files:` + `infra:` 是机械检查的声明集；`约束:` 仅咨询性。越界时流程要求**先回退越界改动 → 重新规划 → 重新实现**，禁止事后修补 scope.md。
+`files:` + `infra:` 是机械检查的声明集；`约束:` 仅咨询性。范围检查先于产出包：**偶发且非必要的越界**只清理越界内容并按原 scope 重试；**实现确实需要扩大范围**才先回退越界改动，再重新规划与实现。两种情况都禁止事后修补 scope.md 追认改动。
+
+全量测试失败也按盲审事实分流：**代码、测试、AC 或 scope 发生变化**时重新检查、产包并盲审；**只有环境或测试命令变化且代码包未变**时保留上一轮双 PASS，直接重试全量测试。环境或测试命令修复最多重试 2 次，连续失败后转人工。
+
+全量通过后，若需要则先更新 project-map，再**再次运行 §6 的 check-scope.sh**；只有最终范围复检通过，才暂存范围内文件并一次提交。
 
 ### 包布局
 
@@ -76,7 +80,7 @@ infra:
 
 ### project-map.md（项目地图：项目的索引）
 
-`PROJECT_ROOT/project-map.md` 是本 bundle 唯一要求主 agent 在业务仓库维护的持久化项目元数据：作为项目的索引，让后续 agent 快速熟悉项目、确认变更文件。内容参考类别（按项目形态取舍）：架构、选型、前端路由、后端 API、公共组件、API auth；只写入方便其他 agent 使用的有价值内容。读取时机、创建时机、更新时机见 `plan-tdd-tasks` skill §11；创建或更新的任务必须将其列入范围声明 `infra:`。它是项目元数据而非规划产物——设计意图仍只存在于对话。盲测者不读取 project-map.md。
+`PROJECT_ROOT/project-map.md` 是本 bundle 唯一要求主 agent 在业务仓库维护的持久化项目元数据：作为项目的索引，让后续 agent 快速熟悉项目、确认变更文件。内容参考类别（按项目形态取舍）：架构、选型、前端路由、后端 API、公共组件、API auth；只写入方便其他 agent 使用的有价值内容。读取时机是普通任务分析期；普通任务发现地图缺失时**只提示运行 `/plan-tdd-tasks init`**，不创建地图。创建时机与全局漂移判定只在 init；普通任务**不执行全局漂移判定**，更新时机仅限本次 feature 改变地图已记录主题，此时更新对应小节并列入 `infra:`。init 细节由 `skills/plan-tdd-tasks/references/init.md` 负责。它是项目元数据而非规划产物——设计意图仍只存在于对话。盲测者不读取 project-map.md。
 
 ## 脚本接口
 
@@ -141,10 +145,10 @@ cd agent-dev-workflow
 
 1. 生成 `project-map.md`（若不存在，按 `plan-tdd-tasks` skill §11.3 判定项目形态、自判类别）；已存在时做**漂移判定**（核对机械可验证的现状事实，不做风格性改写），无漂移则报告无需更新，有漂移**经用户同意后更新**；
 2. 经用户同意后，通过 `update-config` skill 在 `.claude/settings.local.json` 添加 `` `Read(<PROJECT_ROOT>/**)` `` 读权限（拒绝则跳过）；`update-config` 是可选宿主能力，本 bundle 无硬运行时依赖，skill 不可用时报告 `update-config unavailable; permission step skipped` 并继续其余步骤；
-3. 机械校验 `.claude/settings.local.json` 已被 gitignore（未忽略时追加到仓库 `.gitignore`，防止后续任务的范围检查误判）；
+3. 仅当 `.claude/settings.local.json` 已存在或本次写入时，机械校验它已被 gitignore；未忽略时追加到仓库 `.gitignore`，防止后续任务的范围检查误判；
 4. 展示将提交内容后一次 commit 收尾（地图生成为 `chore: init project-map`，地图更新为 `chore: update project-map`），工作树保持 clean。
 
-init 不是任务，仅做初始化：无 AC 清单、无范围声明、无盲测、无 TDD，不写入 `.tmp/`；详见 `plan-tdd-tasks` skill §12。
+init 不是任务，仅做初始化：无 AC 清单、无范围声明、无盲测、无 TDD，不写入 `.tmp/`；入口规则见 `plan-tdd-tasks` skill §12，详细步骤见 `skills/plan-tdd-tasks/references/init.md`。
 
 ## 验证
 

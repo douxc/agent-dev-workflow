@@ -9,6 +9,11 @@ import shared
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+INIT_PATH = ROOT / "references" / "init.md"
+INIT_REFERENCE = (
+    INIT_PATH.read_text(encoding="utf-8") if INIT_PATH.exists() else ""
+)
+INIT_TEXT = SKILL + "\n" + INIT_REFERENCE
 
 
 class PlanTddTasksContractTest(unittest.TestCase):
@@ -94,7 +99,31 @@ class PlanTddTasksContractTest(unittest.TestCase):
         )
 
     def test_scope_violation_reverts_before_replanning(self) -> None:
-        self.assert_all("先回退越界改动", "回到 §4 重新规划", "禁止直接修改 scope.md")
+        section = SKILL.split("## 6. 机械范围检查与产出包", 1)[1].split(
+            "## 7. 盲测派发", 1
+        )[0]
+        accidental = section.split(f"**{shared.SCOPE_ACCIDENTAL}**", 1)[1].split(
+            f"**{shared.SCOPE_EXPANSION}**", 1
+        )[0]
+        expansion = section.split(f"**{shared.SCOPE_EXPANSION}**", 1)[1]
+        self.assertIn("禁止直接修改 scope.md", section)
+        for value in ("保持原 scope", "重新运行本节范围检查", "不重新规划"):
+            with self.subTest(branch="accidental", value=value):
+                self.assertIn(value, accidental)
+        for value in ("先回退越界改动", "回到 §4 重新规划", "再重新实现"):
+            with self.subTest(branch="expansion", value=value):
+                self.assertIn(value, expansion)
+
+    def test_scope_check_precedes_package_build(self) -> None:
+        section = SKILL.split("## 6. 机械范围检查与产出包", 1)[1].split(
+            "## 7. 盲测派发", 1
+        )[0]
+        self.assertIn(shared.SCOPE_BEFORE_PACKAGE, section)
+        for package_step in (shared.PACKAGE_BUILD, "构建 `code/`"):
+            with self.subTest(package_step=package_step):
+                self.assertIn(package_step, section)
+                self.assertLess(section.index(shared.SCOPE_BEFORE_PACKAGE),
+                                section.index(package_step))
 
     def test_full_suite_rules(self) -> None:
         self.assert_all(
@@ -106,11 +135,48 @@ class PlanTddTasksContractTest(unittest.TestCase):
     def test_retry_cap(self) -> None:
         self.assert_all("最多 2 轮", "强制人工", "不得自行开始第 3 轮")
 
-    def test_full_test_failure_restarts_blind_review(self) -> None:
-        self.assertIn("回到 §7 重新派发全新盲测者", SKILL)
+    def test_full_test_failure_rechecks_only_when_package_changes(self) -> None:
+        section = SKILL.split("4. 全量测试 FAIL", 1)[1].split(
+            "## 10. 重跑上限", 1
+        )[0]
+        package_change = section.split(
+            f"**{shared.FULL_FAIL_PACKAGE_CHANGE}**", 1
+        )[1].split(f"**{shared.FULL_FAIL_NO_PACKAGE_CHANGE}**", 1)[0]
+        no_package_change = section.split(
+            f"**{shared.FULL_FAIL_NO_PACKAGE_CHANGE}**", 1
+        )[1]
+        for value in ("回到 §6", "§7", "全新盲测者", "轮次 +1"):
+            with self.subTest(branch="package-change", value=value):
+                self.assertIn(value, package_change)
+        for value in (
+            "保留上一轮双 PASS",
+            "直接重试本节全量测试",
+            "不消耗盲测轮次",
+        ):
+            with self.subTest(branch="no-package-change", value=value):
+                self.assertIn(value, no_package_change)
 
     def test_commit_only_declared_files_once(self) -> None:
         self.assert_all("`git add` 只加范围声明内的文件", "一次 `git commit`")
+
+    def test_final_scope_recheck_follows_map_update_and_precedes_staging(self) -> None:
+        section = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+            "## 10. 重跑上限", 1
+        )[0]
+        self.assertIn(shared.FINAL_SCOPE_RECHECK, section)
+        self.assertLess(section.index("run-full-tests: PASS"),
+                        section.index(shared.FINAL_SCOPE_RECHECK))
+        self.assertLess(section.index("先更新对应小节"),
+                        section.index(shared.FINAL_SCOPE_RECHECK))
+        self.assertLess(section.index(shared.FINAL_SCOPE_RECHECK),
+                        section.index("`git add`"))
+
+    def test_environment_only_retry_has_manual_exit(self) -> None:
+        section = SKILL.split(
+            f"**{shared.FULL_FAIL_NO_PACKAGE_CHANGE}**", 1
+        )[1].split("## 10. 重跑上限", 1)[0]
+        self.assertIn(shared.ENV_RETRY_CAP, section)
+        self.assertIn("连续失败后停止并转人工处理", section)
 
     def test_project_map_semantics(self) -> None:
         self.assert_all(
@@ -128,7 +194,26 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(section, SKILL)
 
     def test_project_map_timing(self) -> None:
-        self.assert_all("读取时机", "创建时机", "更新时机", "文件不存在")
+        for value in ("读取时机", "更新时机", "文件不存在"):
+            with self.subTest(value=value):
+                self.assertIn(value, SKILL)
+        self.assertIn("创建时机", INIT_REFERENCE)
+
+    def test_normal_task_does_not_create_or_globally_drift_check_map(self) -> None:
+        analysis = SKILL.split("## 3. 分析", 1)[1].split("## 4. 规划", 1)[0]
+        timing = SKILL.split("### 11.4 时机", 1)[1].split(
+            "## 12. init 模式", 1
+        )[0]
+        for value in (
+            shared.PROJECT_MAP_INIT_HINT,
+            "普通任务不创建地图",
+            shared.PROJECT_MAP_NO_GLOBAL_DRIFT,
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, analysis)
+        self.assertIn("只提示运行 `/plan-tdd-tasks init`", timing)
+        self.assertNotIn("创建时机 | §3", timing)
+        self.assertNotIn("漂移判定 | §3", timing)
 
     def test_project_map_scope_interaction(self) -> None:
         self.assert_all(
@@ -151,21 +236,25 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assertNotIn("全量留给 §7", SKILL)
 
     def test_init_mode_markers(self) -> None:
-        self.assert_all(
-            shared.INIT_TRIGGER,
-            shared.INIT_NOT_A_TASK,
-            shared.INIT_PERMISSION,
-            shared.INIT_COMMIT,
-        )
+        self.assert_all(shared.INIT_TRIGGER, shared.INIT_NOT_A_TASK,
+                        shared.INIT_REFERENCE)
+        for value in (shared.INIT_PERMISSION, shared.INIT_COMMIT):
+            with self.subTest(value=value):
+                self.assertIn(value, INIT_REFERENCE)
+
+    def test_init_reference_exists_and_owns_detailed_flow(self) -> None:
+        self.assertTrue(INIT_PATH.is_file())
+        self.assertIn("地图", INIT_REFERENCE)
+        self.assertIn("gitignore", INIT_REFERENCE)
+        self.assertIn("权限", INIT_REFERENCE)
+        self.assertNotIn("### 12.3 步骤", SKILL)
 
     def test_init_update_config_unavailable_is_non_blocking(self) -> None:
-        self.assert_all(
-            shared.UPDATE_CONFIG_UNAVAILABLE,
-            "继续其余步骤",
-        )
+        self.assertIn(shared.UPDATE_CONFIG_UNAVAILABLE, INIT_REFERENCE)
+        self.assertIn("继续其余步骤", INIT_REFERENCE)
 
     def test_init_drift_check_and_update(self) -> None:
-        self.assert_all(
+        for value in (
             shared.INIT_DRIFT_CHECK,
             shared.INIT_DRIFT_UPDATE_CONSENT,
             shared.INIT_DRIFT_REFUSE_SKIP,
@@ -174,8 +263,15 @@ class PlanTddTasksContractTest(unittest.TestCase):
             shared.INIT_DRIFT_NO_UPDATE,
             shared.INIT_DRIFT_TABLE_ROW,
             shared.INIT_UPDATE_COMMIT,
-        )
-        self.assertNotIn("跳过生成并报告（漂移更新仍在任务流程", SKILL)
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, INIT_REFERENCE)
+        self.assertNotIn("跳过生成并报告（漂移更新仍在任务流程",
+                         INIT_TEXT)
+
+    def test_tdd_red_has_no_unverifiable_record_ritual(self) -> None:
+        self.assertIn(shared.RED_CAUSE, SKILL)
+        self.assertNotIn(shared.RED_RECORD, SKILL)
 
 
 if __name__ == "__main__":
