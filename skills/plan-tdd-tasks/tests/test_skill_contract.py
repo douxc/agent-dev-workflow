@@ -14,6 +14,12 @@ INIT_REFERENCE = (
     INIT_PATH.read_text(encoding="utf-8") if INIT_PATH.exists() else ""
 )
 INIT_TEXT = SKILL + "\n" + INIT_REFERENCE
+SELF_EXPLAINING_PATH = ROOT / "references" / "self-explaining-code.md"
+SELF_EXPLAINING_REFERENCE = (
+    SELF_EXPLAINING_PATH.read_text(encoding="utf-8")
+    if SELF_EXPLAINING_PATH.exists()
+    else ""
+)
 
 
 class PlanTddTasksContractTest(unittest.TestCase):
@@ -272,6 +278,36 @@ class PlanTddTasksContractTest(unittest.TestCase):
     def test_tdd_red_has_no_unverifiable_record_ritual(self) -> None:
         self.assertIn(shared.RED_CAUSE, SKILL)
         self.assertNotIn(shared.RED_RECORD, SKILL)
+
+    def test_tdd_requires_self_explaining_code(self) -> None:
+        self.assert_all(
+            shared.SELF_EXPLAINING_CODE,
+            shared.SELF_EXPLAINING_REFERENCE,
+            "必须满足该标准",
+        )
+        for value in (
+            shared.DOMAIN_NAMING,
+            "输入、输出、副作用与失败方式",
+            "代码表达“是什么”和“怎么做”",
+            shared.COMMENTS_EXPLAIN_WHY,
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, SELF_EXPLAINING_REFERENCE)
+                self.assertNotIn(value, SKILL)
+
+    def test_self_explaining_reference_has_exactly_three_pairs(self) -> None:
+        self.assertTrue(SELF_EXPLAINING_PATH.is_file())
+        self.assertEqual(
+            SELF_EXPLAINING_REFERENCE.count(shared.BAD_EXAMPLE), 3
+        )
+        self.assertEqual(
+            SELF_EXPLAINING_REFERENCE.count(shared.GOOD_EXAMPLE), 3
+        )
+        for topic in ("含义不明的命名", "魔法值与单位", "复杂控制流"):
+            with self.subTest(topic=topic):
+                self.assertIn(topic, SELF_EXPLAINING_REFERENCE)
+        self.assertNotIn(shared.BAD_EXAMPLE, SKILL)
+        self.assertNotIn(shared.GOOD_EXAMPLE, SKILL)
 
 
 if __name__ == "__main__":

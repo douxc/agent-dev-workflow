@@ -59,6 +59,27 @@ class BlindReviewTasksContractTest(unittest.TestCase):
             "断言粒度不塌缩",
         )
 
+    def test_check_4_self_explaining_code(self) -> None:
+        self.assert_all(
+            shared.CHECK_4_SELF_EXPLAINING,
+            f"../plan-tdd-tasks/{shared.SELF_EXPLAINING_REFERENCE}",
+            "`审查结论`",
+            "[检查4] PASS",
+            "[检查4-n]",
+        )
+        section = SKILL.split(f"## 6. {shared.CHECK_4_SELF_EXPLAINING}", 1)[
+            1
+        ].split("## 7. verdict 输出格式", 1)[0]
+        for duplicated_rule in (
+            "- 命名是否",
+            "- 函数的输入",
+            "- 数字、字符串和单位",
+            "- 控制流是否",
+            "- 注释是否",
+        ):
+            with self.subTest(duplicated_rule=duplicated_rule):
+                self.assertNotIn(duplicated_rule, section)
+
     def test_verdict_format(self) -> None:
         self.assert_all(
             shared.VERDICT_PASS,
@@ -70,6 +91,9 @@ class BlindReviewTasksContractTest(unittest.TestCase):
             "修复建议",
             "末行必须为",
         )
+
+    def test_verdict_aggregate_matches_blocks(self) -> None:
+        self.assert_all(shared.VERDICT_ANY_FAIL, shared.VERDICT_ALL_PASS)
 
     def test_evidence_requires_file_line(self) -> None:
         self.assert_all("包内路径 + 行号", "没有行号不可称证据")

@@ -184,6 +184,14 @@ class DocumentationContractTest(unittest.TestCase):
             shared.UPDATE_CONFIG_UNAVAILABLE,
         )
 
+    def test_documents_self_explaining_code_standard(self) -> None:
+        self.assert_readme_contains(
+            shared.SELF_EXPLAINING_CODE,
+            shared.SELF_EXPLAINING_REFERENCE,
+            "3 组 Bad/Good 对照",
+            shared.CHECK_4_SELF_EXPLAINING,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
