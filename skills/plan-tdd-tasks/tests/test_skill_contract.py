@@ -303,11 +303,35 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assertEqual(
             SELF_EXPLAINING_REFERENCE.count(shared.GOOD_EXAMPLE), 3
         )
-        for topic in ("含义不明的命名", "魔法值与单位", "复杂控制流"):
+        for topic in ("肯定式布尔命名", "魔法值与单位", "复杂控制流"):
             with self.subTest(topic=topic):
                 self.assertIn(topic, SELF_EXPLAINING_REFERENCE)
         self.assertNotIn(shared.BAD_EXAMPLE, SKILL)
         self.assertNotIn(shared.GOOD_EXAMPLE, SKILL)
+
+    def test_positive_boolean_naming_standard_and_example(self) -> None:
+        self.assertIn(shared.POSITIVE_BOOLEAN_NAMING,
+                      SELF_EXPLAINING_REFERENCE)
+        for value in ("`canEdit`", "`hasPermission`", "`isEditable`"):
+            with self.subTest(value=value):
+                self.assertIn(value, SELF_EXPLAINING_REFERENCE)
+        self.assertIn("`!canEdit`", SELF_EXPLAINING_REFERENCE)
+        self.assertIn("`canEdit` 表示当前主体的权限或能力",
+                      SELF_EXPLAINING_REFERENCE)
+        self.assertIn("`isEditable` 表示对象状态",
+                      SELF_EXPLAINING_REFERENCE)
+        self.assertIn("`isDeleted`、`isDisabled`", SELF_EXPLAINING_REFERENCE)
+
+        example = SELF_EXPLAINING_REFERENCE.split("## 示例 1", 1)[1].split(
+            "## 示例 2", 1
+        )[0]
+        bad = example.split(shared.BAD_EXAMPLE, 1)[1].split(
+            shared.GOOD_EXAMPLE, 1
+        )[0]
+        good = example.split(shared.GOOD_EXAMPLE, 1)[1]
+        self.assertIn(shared.NEGATIVE_BOOLEAN_BAD, bad)
+        self.assertIn(shared.POSITIVE_BOOLEAN_GOOD, good)
+        self.assertNotIn("isCannotEdit", good)
 
 
 if __name__ == "__main__":

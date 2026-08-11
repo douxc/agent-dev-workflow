@@ -5,30 +5,36 @@
 ## 规范
 
 - 标识符必须表达领域含义，避免需要上下文猜测的缩写或泛化名称。
+- 存在等价的肯定谓词时，布尔变量和谓词必须使用肯定语义。`canEdit` 表示当前主体的权限或能力，`hasPermission` 表示权限持有；`isEditable` 表示对象状态。避免 `isCannotEdit` 等可直接改写的否定式名称。失败守卫可以写 `!canEdit`，因为被取反的变量本身仍是肯定语义。`isDeleted`、`isDisabled` 等真实领域状态没有自然的肯定同义词时可以保留。
 - 函数的输入、输出、副作用与失败方式必须能从名称、类型和结构直接识别。
 - 让代码表达“是什么”和“怎么做”；若注释在说明这两点，先重命名、提取领域常量或函数并简化控制流。
 - 注释只解释代码无法表达的“为什么”，例如外部约束、反直觉业务规则及安全或兼容性取舍。
 
-## 示例 1：含义不明的命名
+## 示例 1：肯定式布尔命名
 
 ### Bad
 
-```python
-# Retry when the request failed fewer than three times.
-if s == 2 and c < 3:
-    retry()
+```typescript
+const isCannotEdit = user.role !== "admin";
+
+if (isCannotEdit) {
+    hideEditor();
+}
 ```
 
-`s`、`c`、`2` 和 `3` 都要求读者猜测，注释只是在翻译代码。
+`isCannotEdit` 把否定编码进变量；读者必须先理解“不能”，再判断真假，后续取反时还会形成双重否定。
 
 ### Good
 
-```python
-if request_failed and retry_count < MAX_RETRY_ATTEMPTS:
-    retry_request()
+```typescript
+const canEdit = user.role === "admin";
+
+if (canEdit) {
+    showEditor();
+}
 ```
 
-布尔条件、计数和动作直接表达业务语义，不依赖注释。
+`canEdit` 直接回答“是否可以编辑”。若失败路径适合早退出，`if (!canEdit) return;` 仍保持单层、清晰的否定。
 
 ## 示例 2：魔法值与单位
 
@@ -86,7 +92,7 @@ def release_order_for_fulfillment(order: Order) -> None:
 以下任一情况说明代码尚不能自解释：
 
 - 业务标识符依赖缩写、单字母或 `data`、`info`、`temp`、`handle`、`process` 等泛化名称；
-- 布尔名称不能直接判断真假语义；
+- 存在自然的肯定谓词却使用 `isCannotEdit`、`isNotReady` 等否定式名称；`isDeleted`、`isDisabled` 等真实领域状态不因词形带否定含义而自动失败；
 - 数字、字符串或单位缺少领域名称；
 - 多个业务条件堆叠在未命名表达式或深层嵌套中；
 - 注释在翻译代码，或代码语义必须依赖注释才能成立；

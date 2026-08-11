@@ -190,6 +190,7 @@ class DocumentationContractTest(unittest.TestCase):
             shared.SELF_EXPLAINING_REFERENCE,
             "3 组 Bad/Good 对照",
             shared.CHECK_4_SELF_EXPLAINING,
+            shared.POSITIVE_BOOLEAN_NAMING,
         )
 
 

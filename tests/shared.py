@@ -144,3 +144,8 @@ BAD_EXAMPLE = "### Bad"
 GOOD_EXAMPLE = "### Good"
 VERDICT_ANY_FAIL = "任一 FAIL 块存在时，末行必须是 `verdict: FAIL`"
 VERDICT_ALL_PASS = "仅当所有必需块均为 PASS 时"
+POSITIVE_BOOLEAN_NAMING = (
+    "存在等价的肯定谓词时，布尔变量和谓词必须使用肯定语义"
+)
+NEGATIVE_BOOLEAN_BAD = 'const isCannotEdit = user.role !== "admin";'
+POSITIVE_BOOLEAN_GOOD = 'const canEdit = user.role === "admin";'
