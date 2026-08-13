@@ -188,10 +188,12 @@ class DocumentationContractTest(unittest.TestCase):
         self.assert_readme_contains(
             shared.SELF_EXPLAINING_CODE,
             shared.SELF_EXPLAINING_REFERENCE,
-            "3 组 Bad/Good 对照",
+            "4 组 Bad/Good 对照",
+            "只审查本次变更中的人工编写代码",
             shared.CHECK_4_SELF_EXPLAINING,
             shared.POSITIVE_BOOLEAN_NAMING,
         )
+        self.assertNotIn("3 组 Bad/Good 对照", self.readme)
 
 
 if __name__ == "__main__":

@@ -290,20 +290,27 @@ class PlanTddTasksContractTest(unittest.TestCase):
             "输入、输出、副作用与失败方式",
             "代码表达“是什么”和“怎么做”",
             shared.COMMENTS_EXPLAIN_WHY,
+            "独立函数",
+            "高内聚",
         ):
             with self.subTest(value=value):
                 self.assertIn(value, SELF_EXPLAINING_REFERENCE)
                 self.assertNotIn(value, SKILL)
 
-    def test_self_explaining_reference_has_exactly_three_pairs(self) -> None:
+    def test_self_explaining_reference_has_exactly_four_pairs(self) -> None:
         self.assertTrue(SELF_EXPLAINING_PATH.is_file())
         self.assertEqual(
-            SELF_EXPLAINING_REFERENCE.count(shared.BAD_EXAMPLE), 3
+            SELF_EXPLAINING_REFERENCE.count(shared.BAD_EXAMPLE), 4
         )
         self.assertEqual(
-            SELF_EXPLAINING_REFERENCE.count(shared.GOOD_EXAMPLE), 3
+            SELF_EXPLAINING_REFERENCE.count(shared.GOOD_EXAMPLE), 4
         )
-        for topic in ("肯定式布尔命名", "魔法值与单位", "复杂控制流"):
+        for topic in (
+            "肯定式布尔命名",
+            "魔法值与单位",
+            "复杂控制流",
+            "职责混杂的纯计算内联",
+        ):
             with self.subTest(topic=topic):
                 self.assertIn(topic, SELF_EXPLAINING_REFERENCE)
         self.assertNotIn(shared.BAD_EXAMPLE, SKILL)
@@ -331,7 +338,51 @@ class PlanTddTasksContractTest(unittest.TestCase):
         good = example.split(shared.GOOD_EXAMPLE, 1)[1]
         self.assertIn(shared.NEGATIVE_BOOLEAN_BAD, bad)
         self.assertIn(shared.POSITIVE_BOOLEAN_GOOD, good)
+        self.assertIn(shared.BOOLEAN_BEHAVIOR_BAD, bad)
+        self.assertIn(shared.BOOLEAN_BEHAVIOR_GOOD, good)
+        self.assertIn("心智反转", example)
         self.assertNotIn("isCannotEdit", good)
+
+    def test_pure_function_extraction_standard_and_example(self) -> None:
+        for value in (
+            "纯计算逻辑应提取为具名独立函数",
+            "高内聚、低耦合",
+            "纯计算逻辑内联在读写、持久化等副作用流程中",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, SELF_EXPLAINING_REFERENCE)
+        example = SELF_EXPLAINING_REFERENCE.split("## 示例 4", 1)[1].split(
+            "## 审查结论", 1
+        )[0]
+        bad = example.split(shared.BAD_EXAMPLE, 1)[1].split(
+            shared.GOOD_EXAMPLE, 1
+        )[0]
+        good = example.split(shared.GOOD_EXAMPLE, 1)[1]
+        for part in (bad, good):
+            for value in ("1000", "0.85"):
+                with self.subTest(part=part, value=value):
+                    self.assertIn(value, part)
+        for value in (
+            "apply_large_order_discount",
+            "LARGE_ORDER_THRESHOLD",
+            "LARGE_ORDER_DISCOUNT_RATE",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, good)
+        self.assertNotIn("apply_large_order_discount", bad)
+
+    def test_self_explaining_standard_has_context_exemptions(self) -> None:
+        for value in (
+            "生成代码与第三方代码",
+            "框架、协议或公共 API",
+            "短小且作用域明显",
+            "只审查本次变更中的人工编写代码",
+            "包内可定位的来源标记或契约证据",
+            "包内可定位的外部契约证据",
+            "`i`、`x`、`y`、`e`、`err`",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, SELF_EXPLAINING_REFERENCE)
 
 
 if __name__ == "__main__":

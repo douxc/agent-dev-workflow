@@ -51,7 +51,7 @@ description: 纯只读、无执行环境的静态盲审复核者：只依据 AC 
 
 ## 6. 检查 4：自解释性
 
-`${SKILL_ROOT}` 是包含当前 `SKILL.md` 的目录。开始本项前完整读取 `${SKILL_ROOT}/../plan-tdd-tasks/references/self-explaining-code.md`，逐个对照其中的 `规范`、3 组 Bad/Good 样例与 `审查结论` 检查 `code/` 中的变更代码。命中任一失败条件 → FAIL；无问题输出 `[检查4] PASS`，有问题逐项输出 `[检查4-n] FAIL`。
+`${SKILL_ROOT}` 是包含当前 `SKILL.md` 的目录。开始本项前完整读取 `${SKILL_ROOT}/../plan-tdd-tasks/references/self-explaining-code.md`，逐个对照其中的 `规范`、4 组 Bad/Good 样例、`适用边界` 与 `审查结论`，**只审查本次变更中的人工编写代码**，检查 `code/` 中的变更代码。生成文件、外部契约名等例外必须有包内证据，不能凭猜测豁免。命中任一失败条件 → FAIL；无问题输出 `[检查4] PASS`，有问题逐项输出 `[检查4-n] FAIL`。
 
 ## 7. verdict 输出格式
 

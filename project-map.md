@@ -9,7 +9,7 @@
 - 主 skill 支持字面 `/plan-tdd-tasks init` 进入 init 模式（SKILL.md §12，细节在 `references/init.md`）：生成 project-map.md（不存在时）、对已存在地图做漂移判定（核对机械可验证现状事实，经用户同意后更新）、配置项目读权限、一次 chore commit 收尾；普通 feature 缺图时仅提示 init，不创建地图或执行全局漂移判定。
 - 业务仓库侧的唯一持久化项目元数据是 `PROJECT_ROOT/project-map.md`；任务产物在 `.tmp/<task-id>/`（package/ review/ full-tests.log）。
 - 范围检查先于产出包；非必要越界只清理后按原 scope 重试，必要扩围才回退重规划。全量失败仅在代码、测试、AC 或 scope 改变时重走盲审；纯环境或测试命令修复复用已有双 PASS，最多重试 2 次。地图更新后、暂存前再做最终范围复检。
-- 自解释代码标准的 canonical reference 是 `skills/plan-tdd-tasks/references/self-explaining-code.md`（3 组 Bad/Good 对照）；主 skill 在实现前加载并执行，盲审 skill 通过检查 4 按同一标准复核，不复制样例。
+- 自解释代码标准的 canonical reference 是 `skills/plan-tdd-tasks/references/self-explaining-code.md`（4 组行为等价的 Bad/Good 对照与适用边界）；主 skill 在实现前加载并执行，盲审检查 4 只审本次变更中的人工编写代码且不复制规范条目。
 
 ## 选型
 

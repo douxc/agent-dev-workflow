@@ -149,3 +149,5 @@ POSITIVE_BOOLEAN_NAMING = (
 )
 NEGATIVE_BOOLEAN_BAD = 'const isCannotEdit = user.role !== "admin";'
 POSITIVE_BOOLEAN_GOOD = 'const canEdit = user.role === "admin";'
+BOOLEAN_BEHAVIOR_BAD = "setEditorVisibility(!isCannotEdit);"
+BOOLEAN_BEHAVIOR_GOOD = "setEditorVisibility(canEdit);"

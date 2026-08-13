@@ -63,7 +63,10 @@ class BlindReviewTasksContractTest(unittest.TestCase):
         self.assert_all(
             shared.CHECK_4_SELF_EXPLAINING,
             f"../plan-tdd-tasks/{shared.SELF_EXPLAINING_REFERENCE}",
+            "4 组 Bad/Good 样例",
+            "`适用边界`",
             "`审查结论`",
+            "只审查本次变更中的人工编写代码",
             "[检查4] PASS",
             "[检查4-n]",
         )
