@@ -76,6 +76,10 @@ class InstallScriptTest(unittest.TestCase):
         self.assertTrue(SCRIPT.is_file())
         self.assertTrue(os.access(SCRIPT, os.X_OK))
 
+    def test_platform_names_excludes_clauded(self) -> None:
+        script = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('PLATFORM_NAMES=".claude .claudeP"', script)
+
     def test_installs_direct_copies_into_existing_platforms(self) -> None:
         for platform in PLATFORMS:
             (self.home / platform).mkdir()
@@ -94,6 +98,52 @@ class InstallScriptTest(unittest.TestCase):
         for platform in PLATFORMS:
             self.assertFalse((self.home / platform).exists())
             self.assertIn(f"skip {self.real_home / platform}", result.stdout)
+
+    def test_plain_mode_removes_existing_clauded_root_entirely(self) -> None:
+        clauded = self.home / ".claudeD"
+        (clauded / "skills" / SKILLS[0]).mkdir(parents=True)
+        (clauded / "skills" / SKILLS[0] / "SKILL.md").write_text(
+            "stale", encoding="utf-8"
+        )
+        (clauded / "config.json").write_text("user data", encoding="utf-8")
+        platform = self.home / ".claude"
+        platform.mkdir()
+
+        result = run_install(self.home)
+
+        self.assert_success(result)
+        self.assertFalse(clauded.exists(), msg="retired root must be removed")
+        self.assertIn(f"remove {self.real_home / '.claudeD'}", result.stdout)
+        self.assert_skill_installed(".claude", SKILLS[0])
+        self.assert_agent_installed(".claude", SKILLS[0])
+
+    def test_plain_mode_never_creates_or_removes_missing_clauded(self) -> None:
+        result = run_install(self.home)
+
+        self.assert_success(result)
+        self.assertFalse((self.home / ".claudeD").exists())
+        self.assertNotIn(".claudeD", result.stdout)
+
+    def test_hermes_mode_never_removes_clauded(self) -> None:
+        clauded = self.home / ".claudeD"
+        clauded.mkdir()
+        config = clauded / "config.json"
+        config.write_text("user data", encoding="utf-8")
+
+        result = run_install(self.home, args=("-p", "coder"))
+
+        self.assert_success(result)
+        self.assertEqual(config.read_text(encoding="utf-8"), "user data")
+        self.assertTrue(clauded.is_dir())
+
+    def test_renamed_tests_use_current_platform_roots(self) -> None:
+        own = Path(__file__).read_text(encoding="utf-8")
+        for method in (
+            "test_agent_container_as_file_blocks_install_and_preserves_others",
+            "test_rejects_invalid_platform_skills_before_replacing_targets",
+        ):
+            body = own.split(f"def {method}", 1)[1].split("\n    def ", 1)[0]
+            self.assertNotIn(".claudeD", body)
 
     def test_replaces_skill_collisions_without_backups(self) -> None:
         platform_root = self.home / ".claude"
@@ -125,7 +175,7 @@ class InstallScriptTest(unittest.TestCase):
         file_root = self.home / ".claudeP"
         file_root.mkdir()
         (file_root / "agents").write_text("user file", encoding="utf-8")
-        dir_root = self.home / ".claudeD"
+        dir_root = self.home / ".claude"
         (dir_root / "agents").mkdir(parents=True)
         stale_agent = dir_root / "agents" / f"{SKILLS[0]}.md"
         stale_agent.write_text("stale agent", encoding="utf-8")
@@ -189,7 +239,7 @@ class InstallScriptTest(unittest.TestCase):
     def test_rejects_invalid_platform_skills_before_replacing_targets(
         self,
     ) -> None:
-        preserved = self.home / ".claudeD" / "skills" / SKILLS[0]
+        preserved = self.home / ".claudeP" / "skills" / SKILLS[0]
         preserved.mkdir(parents=True)
         (preserved / "marker.txt").write_text(
             "keep until validation passes", encoding="utf-8"

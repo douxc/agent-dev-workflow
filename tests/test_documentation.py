@@ -109,13 +109,23 @@ class DocumentationContractTest(unittest.TestCase):
         self.assert_readme_contains(
             "./install.sh",
             "~/.claude",
-            "~/.claudeD",
             "~/.claudeP",
+            "（`~/.claude`、`~/.claudeP`）",
             "自动移除旧版遗留",
+            "已废弃的 `~/.claudeD` 平台根（若存在）被整体移除",
             "不会代为创建",
             "不创建任何软链接",
             "不产生 `.backup.*`",
         )
+
+    def test_platforms_contract(self) -> None:
+        self.assertEqual(shared.PLATFORMS, (".claude", ".claudeP"))
+        self.assert_readme_contains("~/.claude", "~/.claudeP")
+
+    def test_platform_assertions_omit_bare_clauded(self) -> None:
+        bare_item = '"~/.claudeD"' + ","
+        own = Path(__file__).read_text(encoding="utf-8")
+        self.assertNotIn(bare_item, own)
 
     def test_documents_package_layout(self) -> None:
         for item in shared.PACKAGE_FILES:

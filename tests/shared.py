@@ -124,8 +124,9 @@ INIT_PERMISSION_PER_LANGUAGE = "按语言取舍"
 INIT_PERMISSION_ASK_GROUP = "ask：变更类"
 INIT_PERMISSION_KEEP_ASK = "默认保留询问"
 
-# Installer targets and legacy removal.
-PLATFORMS = (".claude", ".claudeD", ".claudeP")
+# Installer targets and legacy removal. The retired .claudeD platform root
+# is no longer a target: install.sh removes an existing one entirely.
+PLATFORMS = (".claude", ".claudeP")
 AGENT_NAMES = SKILL_NAMES
 LEGACY_SKILLS = ("plan-dev-tasks", "dev-with-tdd")
 

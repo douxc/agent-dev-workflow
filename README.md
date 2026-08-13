@@ -175,9 +175,9 @@ cd agent-dev-workflow
 ./install.sh
 ```
 
-安装器把两个 skill 与两个 agent definitions 直接复制到每个**已存在**的平台根目录（`~/.claude`、`~/.claudeD`、`~/.claudeP`）的 `skills/` 与 `agents/` 下；平台根目录不存在时输出 `skip`，不会代为创建。源仓库是唯一 canonical 来源：不保留单独的 canonical 副本，不创建任何软链接；每次运行先删除旧目标再全新复制，可重复执行，不产生 `.backup.*`。
+安装器把两个 skill 与两个 agent definitions 直接复制到每个**已存在**的平台根目录（`~/.claude`、`~/.claudeP`）的 `skills/` 与 `agents/` 下；平台根目录不存在时输出 `skip`，不会代为创建。源仓库是唯一 canonical 来源：不保留单独的 canonical 副本，不创建任何软链接；每次运行先删除旧目标再全新复制，可重复执行，不产生 `.backup.*`。
 
-安装器**自动移除旧版遗留**（`skills/plan-dev-tasks`、`skills/dev-with-tdd` 及其 agent 文件），不触碰其他任何 skill、agent 或配置。所有校验（HOME、源文件、平台容器）在首次删除前完成；容器若是普通文件而非目录则 fail closed。未知参数报错。
+安装器**自动移除旧版遗留**（`skills/plan-dev-tasks`、`skills/dev-with-tdd` 及其 agent 文件），不触碰其他任何 skill、agent 或配置。已废弃的 `~/.claudeD` 平台根（若存在）被整体移除。所有校验（HOME、源文件、平台容器）在首次删除前完成；容器若是普通文件而非目录则 fail closed。未知参数报错。
 
 `install.sh -p <profile>`（**互斥**模式，与 Claude 平台安装二选一）安装到 Hermes 命名 profile（`~/.hermes/profiles/<profile>/`）：只分发两个 skill（Hermes 无 .md agent 机制，子代理经 `delegate_task` 运行时定义），不触碰 Claude 平台；profile 目录不存在时输出 `skip`，不会代为创建。主 skill 按宿主选择 Claude Code `Agent(blind-review-tasks)` 或 Hermes `delegate_task`；宿主传输不可用、无法创建两个全新上下文或无法认证结果来源时 fail closed，即停止流程。
 

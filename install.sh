@@ -4,7 +4,7 @@ set -euo pipefail
 
 readonly SKILL_NAMES="plan-tdd-tasks blind-review-tasks"
 readonly AGENT_NAMES="plan-tdd-tasks blind-review-tasks"
-readonly PLATFORM_NAMES=".claude .claudeD .claudeP"
+readonly PLATFORM_NAMES=".claude .claudeP"
 readonly HERMES_PROFILES_DIR=".hermes/profiles"
 readonly LEGACY_SKILLS="plan-dev-tasks dev-with-tdd"
 readonly LEGACY_AGENTS="plan-dev-tasks dev-with-tdd"
@@ -124,6 +124,13 @@ for target in "${targets[@]}"; do
     fi
   fi
 done
+
+# Retire the retired .claudeD platform root: it is no longer an install
+# target, so an existing root is removed entirely rather than left stale.
+# -p mode owns only Hermes profiles and must not touch Claude platform roots.
+if [ "$profile_set" -eq 0 ] && path_exists "$HOME_DIR/.claudeD"; then
+  remove_existing "$HOME_DIR/.claudeD"
+fi
 
 install_skills_into() {
   local platform_root="$1"
