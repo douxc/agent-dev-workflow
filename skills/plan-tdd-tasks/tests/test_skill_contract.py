@@ -178,14 +178,12 @@ class PlanTddTasksContractTest(unittest.TestCase):
     def test_commit_only_declared_files_once(self) -> None:
         self.assert_all("`git add` 只加范围声明内的文件", "一次 `git commit`")
 
-    def test_final_scope_recheck_follows_map_update_and_precedes_staging(self) -> None:
+    def test_final_scope_recheck_precedes_staging(self) -> None:
         section = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
             "## 10. 重跑上限", 1
         )[0]
         self.assertIn(shared.FINAL_SCOPE_RECHECK, section)
         self.assertLess(section.index("run-full-tests: PASS"),
-                        section.index(shared.FINAL_SCOPE_RECHECK))
-        self.assertLess(section.index("先更新对应小节"),
                         section.index(shared.FINAL_SCOPE_RECHECK))
         self.assertLess(section.index(shared.FINAL_SCOPE_RECHECK),
                         section.index("`git add`"))
@@ -212,8 +210,46 @@ class PlanTddTasksContractTest(unittest.TestCase):
             with self.subTest(section=section):
                 self.assertIn(section, SKILL)
 
+    def test_analysis_uses_fast_map_navigation_before_source_exploration(self) -> None:
+        analysis = SKILL.split("## 3. 分析", 1)[1].split("## 4. 规划", 1)[0]
+        for value in (
+            shared.PM_FAST_INDEX,
+            shared.PM_NAV_CANDIDATE,
+            shared.PM_INDEX_NO_SOURCE,
+            "只搜索一次 `project-map.md`",
+            "地图未命中",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, analysis)
+        self.assertLess(
+            analysis.index(shared.PM_FAST_INDEX),
+            analysis.index("源码分析"),
+        )
+
+    def test_analysis_has_five_minute_human_checkpoint(self) -> None:
+        analysis = SKILL.split("## 3. 分析", 1)[1].split("## 4. 规划", 1)[0]
+        for value in (
+            shared.PM_ANALYSIS_CHECKPOINT,
+            "已确认",
+            "已排除",
+            "未确认",
+            "残余风险",
+            shared.PM_CONTINUE_WINDOW,
+            shared.PM_ACCEPT_CONFIRMED_ONLY,
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, analysis)
+
+    def test_project_map_is_navigation_not_scope_proof(self) -> None:
+        project_map = SKILL.split("## 11. project-map.md", 1)[1].split(
+            "## 12. init 模式", 1
+        )[0]
+        self.assertIn(shared.PM_NOT_SCOPE_PROOF, project_map)
+        self.assertIn("粗粒度", project_map)
+        self.assertIn("不得记录与代码证据冲突的关系", project_map)
+
     def test_project_map_timing(self) -> None:
-        for value in ("读取时机", "更新时机", "文件不存在"):
+        for value in ("读取时机", "创建与更新", "文件不存在"):
             with self.subTest(value=value):
                 self.assertIn(value, SKILL)
         self.assertIn("创建时机", INIT_REFERENCE)
@@ -225,7 +261,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
         )[0]
         for value in (
             shared.PROJECT_MAP_INIT_HINT,
-            "普通任务不创建地图",
+            "普通任务不创建或更新地图",
             shared.PROJECT_MAP_NO_GLOBAL_DRIFT,
         ):
             with self.subTest(value=value):
@@ -233,16 +269,18 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assertIn("只提示运行 `/plan-tdd-tasks init`", timing)
         self.assertNotIn("创建时机 | §3", timing)
         self.assertNotIn("漂移判定 | §3", timing)
+        self.assertNotIn("更新时机 | §9", timing)
+        self.assertIn(shared.PM_INIT_ONLY_UPDATE, timing)
 
     def test_project_map_scope_interaction(self) -> None:
         self.assert_all(
-            "列入范围声明 `infra:`",
             "不复制进 `code/`",
             "盲测者不读取 project-map.md",
             "前后端分离",
             "前后端一体",
             "取舍",
         )
+        self.assertNotIn("列入范围声明 `infra:`", SKILL)
 
     def test_project_map_not_a_planner_state(self) -> None:
         self.assertIn("无状态机、无版本号、无 gates", SKILL)
@@ -287,6 +325,18 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, INIT_REFERENCE)
         self.assertNotIn("跳过生成并报告（漂移更新仍在任务流程",
                          INIT_TEXT)
+
+    def test_init_generates_high_confidence_one_hop_domain_navigation(self) -> None:
+        for value in (
+            shared.PM_DOMAIN_OBJECT,
+            shared.PM_DIRECT_PRODUCER,
+            shared.PM_DIRECT_CONSUMER,
+            shared.PM_ONE_HOP,
+            "数据库结构不能单独证明生产者",
+            "不确定的关系直接省略",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, INIT_REFERENCE)
 
     def test_init_permission_template_file_exists(self) -> None:
         self.assertTrue(PERMISSION_PATH.is_file())

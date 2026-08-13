@@ -92,6 +92,18 @@ REVIEW_DIR = "review"
 # main agent per project shape (frontend/backend split vs monolith).
 PROJECT_MAP = "project-map.md"
 PM_SECTIONS = ("架构", "选型", "前端路由", "后端 API", "公共组件", "API auth")
+PM_FAST_INDEX = "目标 10–20 秒"
+PM_NAV_CANDIDATE = "待源码验证的导航候选"
+PM_INDEX_NO_SOURCE = "索引阶段不展开源码"
+PM_ANALYSIS_CHECKPOINT = "约 5 分钟"
+PM_CONTINUE_WINDOW = "追加一个 5 分钟窗口"
+PM_ACCEPT_CONFIRMED_ONLY = "仅以已确认内容生成 AC 和 scope"
+PM_INIT_ONLY_UPDATE = "仅由人工触发 `/plan-tdd-tasks init`"
+PM_DOMAIN_OBJECT = "领域对象"
+PM_DIRECT_PRODUCER = "直接生产者"
+PM_DIRECT_CONSUMER = "直接消费者"
+PM_ONE_HOP = "一跳"
+PM_NOT_SCOPE_PROOF = "不证明影响面完整，也不直接授权 scope"
 
 # init 模式 markers — literal `/plan-tdd-tasks init` is the only init trigger;
 # the permission rule and the closing chore commit are init's distinguishing

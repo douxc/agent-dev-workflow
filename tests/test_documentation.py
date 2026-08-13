@@ -150,9 +150,9 @@ class DocumentationContractTest(unittest.TestCase):
             shared.PROJECT_MAP,
             "架构",
             "选型",
-            "读取时机",
-            "创建时机",
-            "更新时机",
+            "普通任务只读",
+            "地图创建和更新",
+            shared.PM_INIT_ONLY_UPDATE,
         )
 
     def test_log_location_in_layout(self) -> None:
@@ -174,6 +174,28 @@ class DocumentationContractTest(unittest.TestCase):
             shared.INIT_DRIFT_UPDATE_CONSENT,
             shared.INIT_DRIFT_NO_UPDATE,
             shared.INIT_UPDATE_COMMIT,
+        )
+
+    def test_documents_fast_navigation_and_bounded_analysis(self) -> None:
+        self.assert_readme_contains(
+            shared.PM_FAST_INDEX,
+            shared.PM_NAV_CANDIDATE,
+            shared.PM_INDEX_NO_SOURCE,
+            shared.PM_ANALYSIS_CHECKPOINT,
+            shared.PM_CONTINUE_WINDOW,
+            shared.PM_ACCEPT_CONFIRMED_ONLY,
+            shared.PM_NOT_SCOPE_PROOF,
+        )
+
+    def test_documents_manual_init_only_domain_navigation(self) -> None:
+        self.assert_readme_contains(
+            shared.PM_INIT_ONLY_UPDATE,
+            shared.PM_DOMAIN_OBJECT,
+            shared.PM_DIRECT_PRODUCER,
+            shared.PM_DIRECT_CONSUMER,
+            shared.PM_ONE_HOP,
+            "数据库结构不能单独证明生产者",
+            "不确定的关系直接省略",
         )
 
     def test_documents_hermes_profile_install(self) -> None:
