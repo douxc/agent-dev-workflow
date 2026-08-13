@@ -178,6 +178,14 @@ class DocumentationContractTest(unittest.TestCase):
             shared.TRANSPORT_STOP,
         )
 
+    def test_documents_init_permission_template(self) -> None:
+        self.assert_readme_contains(
+            shared.INIT_PERMISSION_TEMPLATE,
+            shared.INIT_PERMISSION,
+            shared.INIT_PERMISSION_BASELINE,
+            shared.INIT_PERMISSION_KEEP_ASK,
+        )
+
     def test_documents_optional_update_config_dependency(self) -> None:
         self.assert_readme_contains(
             "无硬运行时依赖",

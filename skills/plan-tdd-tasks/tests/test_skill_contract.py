@@ -20,6 +20,12 @@ SELF_EXPLAINING_REFERENCE = (
     if SELF_EXPLAINING_PATH.exists()
     else ""
 )
+PERMISSION_PATH = ROOT / "references" / "permission-template.md"
+PERMISSION_TEMPLATE = (
+    PERMISSION_PATH.read_text(encoding="utf-8")
+    if PERMISSION_PATH.exists()
+    else ""
+)
 
 
 class PlanTddTasksContractTest(unittest.TestCase):
@@ -274,6 +280,43 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, INIT_REFERENCE)
         self.assertNotIn("跳过生成并报告（漂移更新仍在任务流程",
                          INIT_TEXT)
+
+    def test_init_permission_template_file_exists(self) -> None:
+        self.assertTrue(PERMISSION_PATH.is_file())
+
+    def test_init_permission_template_groups_and_placeholder(self) -> None:
+        for value in (
+            shared.INIT_PERMISSION,
+            shared.INIT_PERMISSION_BASELINE,
+            shared.INIT_PERMISSION_PER_LANGUAGE,
+            shared.INIT_PERMISSION_ASK_GROUP,
+            "Bash(git status:*)",
+            "Bash(git log:*)",
+            "WebSearch",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, PERMISSION_TEMPLATE)
+
+    def test_init_permission_template_keeps_mutating_git_in_ask_group(
+        self,
+    ) -> None:
+        ask_marker_index = PERMISSION_TEMPLATE.index(
+            shared.INIT_PERMISSION_ASK_GROUP
+        )
+        self.assertLess(
+            PERMISSION_TEMPLATE.index("Bash(git status:*)"), ask_marker_index
+        )
+        for value in ("Bash(git commit:*)", "Bash(git push:*)"):
+            with self.subTest(value=value):
+                self.assertIn(value, PERMISSION_TEMPLATE)
+                self.assertGreater(
+                    PERMISSION_TEMPLATE.index(value), ask_marker_index
+                )
+
+    def test_init_permission_step_references_template_and_keeps_ask(self) -> None:
+        self.assertIn(shared.INIT_PERMISSION_TEMPLATE, INIT_REFERENCE)
+        self.assertIn(shared.INIT_PERMISSION, INIT_REFERENCE)
+        self.assertIn(shared.INIT_PERMISSION_KEEP_ASK, INIT_REFERENCE)
 
     def test_tdd_red_has_no_unverifiable_record_ritual(self) -> None:
         self.assertIn(shared.RED_CAUSE, SKILL)

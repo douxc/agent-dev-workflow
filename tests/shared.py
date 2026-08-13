@@ -96,6 +96,15 @@ INIT_DRIFT_NO_UPDATE = "无需更新"
 INIT_DRIFT_TABLE_ROW = "更新时机（init）"
 INIT_UPDATE_COMMIT = "chore: update project-map"
 
+# init 权限模板 markers — init 写入的权限规则不是单条 Read，而是一份模板
+# （references/permission-template.md），init 将 <PROJECT_ROOT> 替换为实际项目根。
+# 通用基线与按语言取舍写入 permissions.allow；ask：变更类默认保留询问。
+INIT_PERMISSION_TEMPLATE = "references/permission-template.md"
+INIT_PERMISSION_BASELINE = "通用基线"
+INIT_PERMISSION_PER_LANGUAGE = "按语言取舍"
+INIT_PERMISSION_ASK_GROUP = "ask：变更类"
+INIT_PERMISSION_KEEP_ASK = "默认保留询问"
+
 # Installer targets and legacy removal.
 PLATFORMS = (".claude", ".claudeD", ".claudeP")
 AGENT_NAMES = SKILL_NAMES
