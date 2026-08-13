@@ -1,21 +1,22 @@
 ---
 name: plan-tdd-tasks
-description: 单 feature 开发全流程主 agent：分析、规划（AC 清单与范围声明）、TDD 实现与自测、机械范围检查、产出包、并行盲测复核、分歧处理、全量测试与提交。用户描述一个开发需求时使用；一次只处理一个 feature。
+description: 单 feature 开发全流程主 agent：分析、规划（AC 清单与范围声明）、准入闸门、TDD 实现与自测、机械范围检查、产出包、并行盲测复核、分歧处理、全量测试与提交。用户描述一个开发需求时使用；一次只处理一个 feature。
 ---
 
 # 单 Feature 全流程：分析 → 规划 → TDD → 盲测 → 全量
 
-本 skill 是单个 feature 开发任务的唯一执行者。所有工作在同一个会话中完成：分析、规划、TDD 实现与自测、机械范围检查、产出包、并行盲测、分歧处理、全量测试与提交。本 skill 无状态机、无版本号、无 gates；稳定性来自 AC 清单的质量、范围声明的机械检查与两个全新上下文的盲测者。本 skill 在业务仓库维护的唯一持久化项目元数据是 `${PROJECT_ROOT}/project-map.md`（§11）——它是项目的索引（地图），不承载任何规划状态。
+本 skill 是单个 feature 开发任务的唯一执行者。所有工作在同一个会话中完成：分析、规划、准入闸门、TDD 实现与自测、机械范围检查、产出包、并行盲测、分歧处理、全量测试与提交。本 skill 无状态机、无版本号、无 gates；稳定性来自 AC 清单的质量、范围声明的机械检查与两个全新上下文的盲测者。本 skill 在业务仓库维护的唯一持久化项目元数据是 `${PROJECT_ROOT}/project-map.md`（§11）——它是项目的索引（地图），不承载任何规划状态。
 
 ## 1. 流程总览
 
 ```text
-① 分析 → ② 规划（AC 清单 + 范围声明 + test-command.txt）→ ③ TDD 实现与自测
-→ ④ check-scope.sh 机械范围检查 → ⑤ 产出包
-→ ⑥ 盲测 ×2（并行、只读、全新上下文）
-→ ⑦ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工）
-→ ⑧ run-full-tests.sh 全量测试（每次尝试最后、1 遍）
-→ ⑨ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
+① 分析 → ② 规划（AC 清单 + 范围声明 + test-command.txt）
+→ ③ 准入闸门（check-env.sh 环境不变式 + validate-ac.sh AC 校验）
+→ ④ TDD 实现与自测 → ⑤ check-scope.sh 机械范围检查 → ⑥ 产出包
+→ ⑦ 盲测 ×2（并行、只读、全新上下文）
+→ ⑧ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工）
+→ ⑨ run-full-tests.sh 全量测试（每次尝试最后、1 遍）
+→ ⑩ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
 ```
 
 重跑上限：盲测最多 2 轮，超限强制人工（§10）。
@@ -28,8 +29,9 @@ description: 单 feature 开发全流程主 agent：分析、规划（AC 清单�
 - 任务期间**不得执行 `git commit`，不得执行 `git add`/stage**（§9 最终提交与 §12 init 收尾提交是仅有的例外）；不得 push。
 - **分支策略**：main/master 是保护分支，不直接提交。开发基于最新 main checkout 一个临时分支（无长期 dev 分支）；开发、修复、调整完成后 commit 到该临时分支。由用户主动触发 merge 到 main；merge 完成后删除本地临时分支，main 始终保持最新且工作树 clean。任务开始前先基于最新 main checkout 一个临时分支；最终提交必须落在该临时分支。
 - 任务开始前工作树必须 clean（`git status --porcelain` 为空）。非 clean 时先与用户确认基线：是并入本次任务还是先处理现有改动，确认前不开始。
+- **环境不变式（三条）**：在临时分支上（§2 分支策略）；工作树只含本任务改动（`.tmp/<task-id>/` 除外）；`base` 与分支起点一致（`HEAD == base`）。任一破坏：立即**终止**流程并转人工处理，**不自愈**、不自行修复。由准入闸门的 `check-env.sh` 机械校验（§4.4）。
 - 唯一临时目录：`${PROJECT_ROOT}/.tmp/<task-id>/`。任务开始前若存在同名残留，先与用户确认后删除。任务结束（含失败、放弃）后清理该目录。
-- `${SKILL_ROOT}` 是包含当前已加载 `SKILL.md` 的目录。本 skill 的脚本固定为 `${SKILL_ROOT}/scripts/check-scope.sh` 与 `${SKILL_ROOT}/scripts/run-full-tests.sh`，**以绝对路径调用**；禁止在业务仓库复制、改写或新建这两个脚本，禁止探索业务仓库中的同名文件。
+- `${SKILL_ROOT}` 是包含当前已加载 `SKILL.md` 的目录。本 skill 的脚本固定为 `${SKILL_ROOT}/scripts/` 下五个：`check-scope.sh`、`run-full-tests.sh`（§6/§9）与 `check-env.sh`、`validate-ac.sh`、`parse-verdict.sh`（§4.4/§7），**以绝对路径调用**；禁止在业务仓库复制、改写或新建这些脚本，禁止探索业务仓库中的同名文件。
 
 ## 3. 分析
 
@@ -89,6 +91,24 @@ infra:
 ### 4.3 测试命令（`test-command.txt`）
 
 恰好一行非空内容：§3 确定的全量测试命令。
+
+### 4.4 准入闸门（环境 + AC 校验）
+
+规划产物就绪、环境准备完成（基于最新 main checkout 临时分支，起点 = `base`，§3 步骤 5）后，进入 §5 之前先跑两个机械闸门；任一失败即**终止**流程转人工，不进入 §5：
+
+1. **环境不变式**（§2 三条；任一破坏：**终止**、**不自愈**）：
+
+```text
+${SKILL_ROOT}/scripts/check-env.sh --project-root <PROJECT_ROOT> --base <BASE> --branch <BRANCH>
+```
+
+2. **AC 校验**（AC 语法承重墙机械校验；FAIL 即终止）：
+
+```text
+${SKILL_ROOT}/scripts/validate-ac.sh --project-root <PROJECT_ROOT> --ac-file <package>/ac-list.md --scope-file <package>/scope.md
+```
+
+两者都以绝对路径调用，退出码 0 才进入 §5 TDD。
 
 ## 5. TDD 实现与自测
 
@@ -159,7 +179,7 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 ```
 
 2. `run-full-tests: PASS` 后进入提交收尾：
-   - 确认当前分支不是 main（§2 分支策略，main 是保护分支）；在 main 时停止并转人工；
+   - **防御性复检**：确认当前分支不是 main（§2 分支策略，main 是保护分支）；在 main 时停止并转人工；
    - 若本次任务修改了 project-map.md 已记录的主题（§11.4 更新时机），先更新对应小节；
    - 地图处理完成后，再次运行 §6 的 check-scope.sh；只有退出码 0 才继续，失败按 §6 分流；
    - `git add` 只加范围声明内的文件（`files:` + `infra:`）；

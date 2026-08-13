@@ -26,6 +26,13 @@ PERMISSION_TEMPLATE = (
     if PERMISSION_PATH.exists()
     else ""
 )
+AGENT_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "adapters" / "claude-code" / "agents" / "plan-tdd-tasks.md"
+)
+AGENT = (
+    AGENT_PATH.read_text(encoding="utf-8") if AGENT_PATH.exists() else ""
+)
 
 
 class PlanTddTasksContractTest(unittest.TestCase):
@@ -464,6 +471,45 @@ class PlanTddTasksContractTest(unittest.TestCase):
         ):
             with self.subTest(value=value):
                 self.assertIn(value, SELF_EXPLAINING_REFERENCE)
+
+    def test_gate_documented_before_tdd(self) -> None:
+        for value in (
+            "准入闸门",
+            shared.SCRIPT_CHECK_ENV,
+            shared.SCRIPT_VALIDATE_AC,
+            "${SKILL_ROOT}/scripts/check-env.sh",
+            "${SKILL_ROOT}/scripts/validate-ac.sh",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, SKILL)
+        tdd_section = SKILL.index("## 5. TDD 实现与自测")
+        self.assertLess(SKILL.index(shared.SCRIPT_CHECK_ENV), tdd_section)
+        self.assertLess(SKILL.index(shared.SCRIPT_VALIDATE_AC), tdd_section)
+
+    def test_environment_invariants_terminate_no_self_heal(self) -> None:
+        for value in ("环境不变式", "终止", "不自愈"):
+            with self.subTest(value=value):
+                self.assertIn(value, SKILL)
+
+    def test_final_section_reframes_branch_check_as_defensive(self) -> None:
+        section = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+            "## 10. 重跑上限", 1
+        )[0]
+        self.assertIn("防御性", section)
+        self.assertIn("当前分支不是 main", section)
+        self.assertIn("停止并转人工", section)
+
+    def test_agent_file_mentions_gate_and_all_scripts(self) -> None:
+        self.assertIn("准入闸门", AGENT)
+        for value in (
+            "${SKILL_ROOT}/scripts/check-scope.sh",
+            "${SKILL_ROOT}/scripts/run-full-tests.sh",
+            "${SKILL_ROOT}/scripts/check-env.sh",
+            "${SKILL_ROOT}/scripts/validate-ac.sh",
+            "${SKILL_ROOT}/scripts/parse-verdict.sh",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, AGENT)
 
 
 if __name__ == "__main__":

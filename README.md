@@ -2,7 +2,7 @@
 
 一套面向 Claude Code、支持 Hermes profile 的单 feature 开发任务协作 skill bundle，由两个必须成对安装的 skill 组成：
 
-- `plan-tdd-tasks` —— 唯一面向用户的开发入口与全流程主 agent：分析 → 规划（AC 清单 + 范围声明）→ TDD 实现与自测 → 机械范围检查 → 产出包 → 并行盲测 ×2 → 分歧处理 → 全量测试 → 提交。
+- `plan-tdd-tasks` —— 唯一面向用户的开发入口与全流程主 agent：分析 → 规划（AC 清单 + 范围声明）→ 准入闸门 → TDD 实现与自测 → 机械范围检查 → 产出包 → 并行盲测 ×2 → 分歧处理 → 全量测试 → 提交。
 - `blind-review-tasks` —— 纯只读、无执行环境的静态盲审复核者：只依据 AC 清单、代码包、测试与范围声明做独立 code review，输出结构化 verdict。只由 `plan-tdd-tasks` 并行派发。
 
 哲学：**机械的脚本化，判断的留给人，盲测防自证，契约测试锁死**。与旧版（`plan-dev-tasks` / `dev-with-tdd`）的关系：旧架构（状态机、版本号、gates、协调器、hooks 强制层）已整体退役并删除；本仓库从零重建。
@@ -11,11 +11,12 @@
 
 ```text
 ① 主 agent 分析 → ② 规划（AC 清单 + 范围声明 + test-command.txt，规划不落盘）
-→ ③ TDD 实现与自测 → ④ 先运行机械范围检查 → ⑤ 产出包
-→ ⑥ 盲测 ×2（并行、只读、全新上下文，输入只有 AC/代码/测试/范围声明）
-→ ⑦ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工仲裁）
-→ ⑧ run-full-tests.sh 全量测试（每次尝试最后、恰好 1 遍）
-→ ⑨ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
+→ ③ 准入闸门（check-env.sh 环境不变式 + validate-ac.sh AC 校验）
+→ ④ TDD 实现与自测 → ⑤ 先运行机械范围检查 → ⑥ 产出包
+→ ⑦ 盲测 ×2（并行、只读、全新上下文，输入只有 AC/代码/测试/范围声明）
+→ ⑧ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工仲裁）
+→ ⑨ run-full-tests.sh 全量测试（每次尝试最后、恰好 1 遍）
+→ ⑩ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
 ```
 
 重跑上限：盲测最多 2 轮，超限强制人工。
@@ -124,6 +125,48 @@ run-full-tests.sh --project-root <dir> --test-cmd <string> [--workdir <dir>] [--
 | 1 | `run-full-tests: FAIL (exit N)` |
 | 2 | `run-full-tests: USAGE ERROR` |
 
+### `check-env.sh`
+
+```text
+check-env.sh --project-root <dir> --base <rev> --branch <branch>
+```
+
+机械校验三条环境不变式（skill §2）：当前分支 == `--branch`（且非 main/master 保护分支）、工作树只含本任务改动（`.tmp/` 无条件排除）、`HEAD == --base`。任一破坏即 FAIL。末行状态：
+
+| 退出码 | 状态行 |
+|---|---|
+| 0 | `env-check: PASS (branch <branch> at base)` |
+| 1 | `env-check: FAIL (…)` |
+| 2 | 用法/校验错误（stderr 报错） |
+
+### `validate-ac.sh`
+
+```text
+validate-ac.sh --project-root <dir> --ac-file <path> --scope-file <path>
+```
+
+AC 语法承重墙机械校验（skill §4.1）：每条 AC 断言/归属/验证三字段齐备、验证 ∈ {unit, integration, scripted}、断言无禁用词（合理/适当/优雅/快速/尽可能/一些）、归属 ⊆ 范围声明、范围 `files:` 每个文件被 ≥1 条 AC 归属覆盖或列入 `infra:`。末行状态：
+
+| 退出码 | 状态行 |
+|---|---|
+| 0 | `ac-check: PASS (n ACs, m declared)` |
+| 1 | `ac-check: FAIL …` |
+| 2 | 用法/校验错误（stderr 报错） |
+
+### `parse-verdict.sh`
+
+```text
+parse-verdict.sh --verdict-file <path>
+```
+
+盲测 verdict 机械解析（skill §7/§8）：末行 `verdict: PASS` → PASS；末行 `verdict: FAIL` → 先回显 FAIL 块（`[AC-n] FAIL` 及其后紧跟的 `证据:` / `理由:` 行）再 FAIL；无合法 verdict 行、空文件或缺失文件 → MALFORMED。末行状态：
+
+| 退出码 | 状态行 |
+|---|---|
+| 0 | `verdict-parse: PASS` |
+| 1 | `verdict-parse: FAIL` |
+| 2 | `verdict-parse: MALFORMED` |
+
 ## 安装
 
 ```bash
@@ -170,6 +213,9 @@ python3 -m unittest discover -s skills/plan-tdd-tasks/tests -p 'test_*.py'
 python3 -m unittest discover -s skills/blind-review-tasks/tests -p 'test_*.py'
 bash -n install.sh
 bash -n skills/plan-tdd-tasks/scripts/check-scope.sh
+bash -n skills/plan-tdd-tasks/scripts/check-env.sh
+bash -n skills/plan-tdd-tasks/scripts/validate-ac.sh
+bash -n skills/plan-tdd-tasks/scripts/parse-verdict.sh
 sh -n skills/plan-tdd-tasks/scripts/run-full-tests.sh
 git diff --check
 ```

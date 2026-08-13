@@ -11,6 +11,9 @@ MAIN_SKILL = "plan-tdd-tasks"
 REVIEW_SKILL = "blind-review-tasks"
 SCRIPT_CHECK_SCOPE = "check-scope.sh"
 SCRIPT_RUN_FULL_TESTS = "run-full-tests.sh"
+SCRIPT_CHECK_ENV = "check-env.sh"
+SCRIPT_VALIDATE_AC = "validate-ac.sh"
+SCRIPT_PARSE_VERDICT = "parse-verdict.sh"
 
 # Flags.
 FLAG_PROJECT_ROOT = "--project-root"
@@ -19,6 +22,9 @@ FLAG_BASE = "--base"
 FLAG_TEST_CMD = "--test-cmd"
 FLAG_WORKDIR = "--workdir"
 FLAG_LOG_FILE = "--log-file"
+FLAG_BRANCH = "--branch"
+FLAG_AC_FILE = "--ac-file"
+FLAG_VERDICT_FILE = "--verdict-file"
 FLAG_PROFILE = "-p"
 
 # Exit codes.
@@ -37,6 +43,19 @@ STAGED_WARNING = "staged:"
 RUN_FULL_TESTS_PASS = "run-full-tests: PASS"
 RUN_FULL_TESTS_FAIL = "run-full-tests: FAIL"
 RUN_FULL_TESTS_USAGE = "run-full-tests: USAGE ERROR"
+
+# check-env.sh status lines.
+ENV_CHECK_PASS = "env-check: PASS"
+ENV_CHECK_FAIL = "env-check: FAIL"
+
+# validate-ac.sh status lines.
+AC_CHECK_PASS = "ac-check: PASS"
+AC_CHECK_FAIL = "ac-check: FAIL"
+
+# parse-verdict.sh status lines.
+VERDICT_PARSE_PASS = "verdict-parse: PASS"
+VERDICT_PARSE_FAIL = "verdict-parse: FAIL"
+VERDICT_PARSE_MALFORMED = "verdict-parse: MALFORMED"
 
 # 范围声明 markers.
 SCOPE_MARKER_FILES = "files:"

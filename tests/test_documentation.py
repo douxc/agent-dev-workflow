@@ -216,6 +216,26 @@ class DocumentationContractTest(unittest.TestCase):
         self.assertNotIn("deploy/test", self.readme)
         self.assertNotIn("基于 dev 分支", self.readme)
 
+    def test_documents_mechanical_gate_scripts(self) -> None:
+        self.assert_readme_contains(
+            "准入闸门",
+            shared.SCRIPT_CHECK_ENV,
+            shared.SCRIPT_VALIDATE_AC,
+            shared.SCRIPT_PARSE_VERDICT,
+            shared.ENV_CHECK_PASS,
+            shared.AC_CHECK_PASS,
+            shared.VERDICT_PARSE_PASS,
+            shared.VERDICT_PARSE_FAIL,
+            shared.VERDICT_PARSE_MALFORMED,
+        )
+
+    def test_documents_gate_validation_commands(self) -> None:
+        self.assert_readme_contains(
+            "bash -n skills/plan-tdd-tasks/scripts/check-env.sh",
+            "bash -n skills/plan-tdd-tasks/scripts/validate-ac.sh",
+            "bash -n skills/plan-tdd-tasks/scripts/parse-verdict.sh",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
