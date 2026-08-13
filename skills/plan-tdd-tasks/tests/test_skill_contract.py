@@ -344,36 +344,44 @@ class PlanTddTasksContractTest(unittest.TestCase):
     def test_init_permission_template_groups_and_placeholder(self) -> None:
         for value in (
             shared.INIT_PERMISSION,
+            shared.INIT_PERMISSION_EDIT_ROOT,
             shared.INIT_PERMISSION_BASELINE,
             shared.INIT_PERMISSION_PER_LANGUAGE,
-            shared.INIT_PERMISSION_ASK_GROUP,
-            "Bash(git status:*)",
-            "Bash(git log:*)",
+            shared.INIT_PERMISSION_GIT_ALL,
+            *shared.INIT_SHELL_ALLOW,
+            shared.INIT_PERMISSION_HOME_CLAUDE,
+            shared.INIT_PERMISSION_HOME_CLAUDE_P,
             "WebSearch",
+            "WebFetch",
+            "Bash(python3 -m unittest:*)",
+            "Bash(npm test:*)",
+            "Bash(cargo test:*)",
+            "Bash(go test:*)",
         ):
             with self.subTest(value=value):
                 self.assertIn(value, PERMISSION_TEMPLATE)
+        self.assertNotIn("WebFetch(", PERMISSION_TEMPLATE)
+        self.assertNotIn("ask：变更类", PERMISSION_TEMPLATE)
 
-    def test_init_permission_template_keeps_mutating_git_in_ask_group(
-        self,
-    ) -> None:
-        ask_marker_index = PERMISSION_TEMPLATE.index(
-            shared.INIT_PERMISSION_ASK_GROUP
-        )
-        self.assertLess(
-            PERMISSION_TEMPLATE.index("Bash(git status:*)"), ask_marker_index
-        )
-        for value in ("Bash(git commit:*)", "Bash(git push:*)"):
-            with self.subTest(value=value):
-                self.assertIn(value, PERMISSION_TEMPLATE)
-                self.assertGreater(
-                    PERMISSION_TEMPLATE.index(value), ask_marker_index
-                )
-
-    def test_init_permission_step_references_template_and_keeps_ask(self) -> None:
+    def test_init_permission_step_references_template(self) -> None:
         self.assertIn(shared.INIT_PERMISSION_TEMPLATE, INIT_REFERENCE)
         self.assertIn(shared.INIT_PERMISSION, INIT_REFERENCE)
-        self.assertIn(shared.INIT_PERMISSION_KEEP_ASK, INIT_REFERENCE)
+        self.assertNotIn("ask：变更类", INIT_REFERENCE)
+        self.assertNotIn("默认保留询问", INIT_REFERENCE)
+
+    def test_init_step_order_permission_before_project_map(self) -> None:
+        permission_step = INIT_REFERENCE.index("**权限**")
+        self.assertLess(
+            permission_step, INIT_REFERENCE.index("**生成或更新项目地图**")
+        )
+        self.assertLess(
+            INIT_REFERENCE.index("**生成或更新项目地图**"),
+            INIT_REFERENCE.index("**gitignore 校验**"),
+        )
+        self.assertLess(
+            INIT_REFERENCE.index("**gitignore 校验**"),
+            INIT_REFERENCE.index("**收尾**"),
+        )
 
     def test_tdd_red_has_no_unverifiable_record_ritual(self) -> None:
         self.assertIn(shared.RED_CAUSE, SKILL)

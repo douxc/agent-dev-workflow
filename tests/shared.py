@@ -110,7 +110,7 @@ PM_NOT_SCOPE_PROOF = "不证明影响面完整，也不直接授权 scope"
 # behaviors. Full strings only, never the bare word "init" (substring hazard).
 INIT_TRIGGER = "/plan-tdd-tasks init"
 INIT_NOT_A_TASK = "init 不是任务"
-INIT_PERMISSION = "Read(<PROJECT_ROOT>/**)"
+INIT_PERMISSION = "Read(//<PROJECT_ROOT>/**)"
 INIT_COMMIT = "chore: init project-map"
 INIT_EXCEPTION = "§12 init 收尾提交"
 
@@ -127,14 +127,18 @@ INIT_DRIFT_NO_UPDATE = "无需更新"
 INIT_DRIFT_TABLE_ROW = "更新时机（init）"
 INIT_UPDATE_COMMIT = "chore: update project-map"
 
-# init 权限模板 markers — init 写入的权限规则不是单条 Read，而是一份模板
-# （references/permission-template.md），init 将 <PROJECT_ROOT> 替换为实际项目根。
-# 通用基线与按语言取舍写入 permissions.allow；ask：变更类默认保留询问。
+# init 权限模板 markers — init 写入的权限规则不是单条 Read，而是一份全放行模板
+# （references/permission-template.md），init 将 <PROJECT_ROOT> 替换为项目根绝对
+# 路径去掉开头 / 的形式（模板自带 // 前缀）。通用基线与按语言取舍全部写入
+# permissions.allow，无保留询问的 ask 分组。
 INIT_PERMISSION_TEMPLATE = "references/permission-template.md"
 INIT_PERMISSION_BASELINE = "通用基线"
 INIT_PERMISSION_PER_LANGUAGE = "按语言取舍"
-INIT_PERMISSION_ASK_GROUP = "ask：变更类"
-INIT_PERMISSION_KEEP_ASK = "默认保留询问"
+INIT_PERMISSION_EDIT_ROOT = "Edit(//<PROJECT_ROOT>/**)"
+INIT_PERMISSION_GIT_ALL = "Bash(git:*)"
+INIT_SHELL_ALLOW = ("Bash(bash:*)", "Bash(sh:*)", "Bash(zsh:*)")
+INIT_PERMISSION_HOME_CLAUDE = "Read(~/.claude/**)"
+INIT_PERMISSION_HOME_CLAUDE_P = "Read(~/.claudeP/**)"
 
 # Installer targets and legacy removal. The retired .claudeD platform root
 # is no longer a target: install.sh removes an existing one entirely.

@@ -204,8 +204,8 @@ cd agent-dev-workflow
 
 在业务仓库首次使用前，可运行 `/plan-tdd-tasks init` 做一次性初始化（**仅字面触发**；自然语言请求一律走正常任务流程）：
 
-1. 生成 `project-map.md`（若不存在，按 `plan-tdd-tasks` skill §11.3 判定项目形态、自判类别，并总结领域对象及一跳直接生产者/直接消费者导航）；已存在时做**漂移判定**（核对机械可验证的现状事实，不做风格性改写），无漂移则报告无需更新，有漂移**经用户同意后更新**；数据库结构不能单独证明生产者，不确定的关系直接省略；
-2. 读取 `references/permission-template.md`，将 `<PROJECT_ROOT>` 替换为实际项目根后展示规则（通用基线含 `` `Read(<PROJECT_ROOT>/**)` `` 等只读规则）；经用户同意后通过 `update-config` skill 把「通用基线」与「按语言取舍」写入 `.claude/settings.local.json` 的 `permissions.allow`，「ask：变更类」默认保留询问、不写入（拒绝则跳过）；`update-config` 是可选宿主能力，本 bundle 无硬运行时依赖，skill 不可用时报告 `update-config unavailable; permission step skipped` 并继续其余步骤；
+1. 读取 `references/permission-template.md`，将 `<PROJECT_ROOT>` 替换为项目根绝对路径去掉开头 `/` 的形式（配合模板 `//` 前缀）后展示完整规则——通用基线含 `` `Read(//<PROJECT_ROOT>/**)` ``、`` `Edit(//<PROJECT_ROOT>/**)` ``、`Bash(git:*)`、完整 `bash`/`sh`/`zsh` 放行、裸 `WebSearch`/`WebFetch`、`` `Read(~/.claude/**)` `` 与 `` `Read(~/.claudeP/**)` ``；按语言取舍含 `python3 -m unittest`/`npm test`/`cargo test`/`go test` 等测试命令；全部规则写入 allow、无保留询问分组；经用户同意后通过 `update-config` skill 写入 `.claude/settings.local.json` 的 `permissions.allow`（拒绝则跳过）；`update-config` 是可选宿主能力，本 bundle 无硬运行时依赖，skill 不可用时报告 `update-config unavailable; permission step skipped` 并继续其余步骤；
+2. 生成 `project-map.md`（若不存在，按 `plan-tdd-tasks` skill §11.3 判定项目形态、自判类别，并总结领域对象及一跳直接生产者/直接消费者导航）；已存在时做**漂移判定**（核对机械可验证的现状事实，不做风格性改写），无漂移则报告无需更新，有漂移**经用户同意后更新**；数据库结构不能单独证明生产者，不确定的关系直接省略；
 3. 仅当 `.claude/settings.local.json` 已存在或本次写入时，机械校验它已被 gitignore；未忽略时追加到仓库 `.gitignore`，防止后续任务的范围检查误判；
 4. 展示将提交内容后一次 commit 收尾（地图生成为 `chore: init project-map`，地图更新为 `chore: update project-map`），工作树保持 clean。
 

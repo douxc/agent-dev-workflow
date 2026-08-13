@@ -214,8 +214,11 @@ class DocumentationContractTest(unittest.TestCase):
         self.assert_readme_contains(
             shared.INIT_PERMISSION_TEMPLATE,
             shared.INIT_PERMISSION,
+            shared.INIT_PERMISSION_EDIT_ROOT,
             shared.INIT_PERMISSION_BASELINE,
-            shared.INIT_PERMISSION_KEEP_ASK,
+            shared.INIT_PERMISSION_GIT_ALL,
+            shared.INIT_PERMISSION_HOME_CLAUDE,
+            shared.INIT_PERMISSION_HOME_CLAUDE_P,
         )
 
     def test_documents_optional_update_config_dependency(self) -> None:
