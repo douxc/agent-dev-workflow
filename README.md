@@ -20,6 +20,10 @@
 
 重跑上限：盲测最多 2 轮，超限强制人工。
 
+### 分支策略
+
+main/master 是保护分支，不直接提交。所有开发基于 dev 分支：发版完成后基于最新 main checkout dev；dev 开发完成后 merge 到 deploy/test 发布测试环境；迭代完成后将 dev merge/MR 回 main，保持 main/master/dev/deploy/* 同步。任务的最终提交必须落在 dev（不在 dev 时先与用户确认再切换）。
+
 ### 分歧处理
 
 | A \ B | pass | fail |

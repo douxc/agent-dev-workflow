@@ -297,6 +297,28 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, SELF_EXPLAINING_REFERENCE)
                 self.assertNotIn(value, SKILL)
 
+    def test_branch_policy_in_discipline_and_publish(self) -> None:
+        discipline = SKILL.split("## 2. 通用纪律", 1)[1].split(
+            "## 3. 分析", 1
+        )[0]
+        for value in (
+            shared.BRANCH_PROTECTED_MAIN,
+            shared.BRANCH_DEV_BASE,
+            shared.BRANCH_DEPLOY_TEST,
+            shared.BRANCH_SYNC_ALL,
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, discipline)
+        publish = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+            "## 10. 重跑上限", 1
+        )[0]
+        self.assertIn(shared.BRANCH_COMMIT_ON_DEV, publish)
+        self.assertIn("不在 dev 时停止并转人工", publish)
+
+    def test_init_commit_requires_dev_branch(self) -> None:
+        self.assertIn("dev 分支", INIT_REFERENCE)
+        self.assertIn("转人工", INIT_REFERENCE)
+
     def test_self_explaining_reference_has_exactly_four_pairs(self) -> None:
         self.assertTrue(SELF_EXPLAINING_PATH.is_file())
         self.assertEqual(

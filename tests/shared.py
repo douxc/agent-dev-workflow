@@ -151,3 +151,10 @@ NEGATIVE_BOOLEAN_BAD = 'const isCannotEdit = user.role !== "admin";'
 POSITIVE_BOOLEAN_GOOD = 'const canEdit = user.role === "admin";'
 BOOLEAN_BEHAVIOR_BAD = "setEditorVisibility(!isCannotEdit);"
 BOOLEAN_BEHAVIOR_GOOD = "setEditorVisibility(canEdit);"
+
+# Branch policy markers.
+BRANCH_PROTECTED_MAIN = "main/master 是保护分支"
+BRANCH_DEV_BASE = "基于 dev 分支"
+BRANCH_DEPLOY_TEST = "deploy/test"
+BRANCH_SYNC_ALL = "保持 main/master/dev/deploy/* 同步"
+BRANCH_COMMIT_ON_DEV = "确认当前分支为 dev"

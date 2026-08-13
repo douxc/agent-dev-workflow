@@ -7,6 +7,7 @@
 - 主 skill 随包分发两个脚本：`skills/plan-tdd-tasks/scripts/check-scope.sh`（bash，Git NUL 分隔路径的机械范围检查）与 `run-full-tests.sh`（sh，全量测试；相对日志路径以项目根解析），以绝对路径调用，均有契约测试。
 - agent definitions 在 `adapters/claude-code/agents/`（plan-tdd-tasks.md / blind-review-tasks.md）；`install.sh` 把 skills + agents 复制到每个已存在的平台根（~/.claude、~/.claudeD、~/.claudeP），自动移除旧版遗留（plan-dev-tasks / dev-with-tdd），不碰任何配置；支持 `-p <profile>` 互斥模式分发 skills（无 agents）到 Hermes 命名 profile（~/.hermes/profiles/<profile>/）。
 - 主 skill 支持字面 `/plan-tdd-tasks init` 进入 init 模式（SKILL.md §12，细节在 `references/init.md`）：生成 project-map.md（不存在时）、对已存在地图做漂移判定（核对机械可验证现状事实，经用户同意后更新）、配置项目读权限、一次 chore commit 收尾；普通 feature 缺图时仅提示 init，不创建地图或执行全局漂移判定。
+- 分支策略：main/master 是保护分支，不直接提交；所有开发基于 dev（发版后从最新 main checkout dev），dev 完成后 merge 到 deploy/test 发布测试环境，迭代后 merge/MR 回 main，保持 main/master/dev/deploy/* 同步。skill §2 与 §9、init 收尾都要求最终提交落在 dev。
 - 业务仓库侧的唯一持久化项目元数据是 `PROJECT_ROOT/project-map.md`；任务产物在 `.tmp/<task-id>/`（package/ review/ full-tests.log）。
 - 范围检查先于产出包；非必要越界只清理后按原 scope 重试，必要扩围才回退重规划。全量失败仅在代码、测试、AC 或 scope 改变时重走盲审；纯环境或测试命令修复复用已有双 PASS，最多重试 2 次。地图更新后、暂存前再做最终范围复检。
 - 自解释代码标准的 canonical reference 是 `skills/plan-tdd-tasks/references/self-explaining-code.md`（4 组行为等价的 Bad/Good 对照与适用边界）；主 skill 在实现前加载并执行，盲审检查 4 只审本次变更中的人工编写代码且不复制规范条目。
