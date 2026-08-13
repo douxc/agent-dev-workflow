@@ -163,7 +163,8 @@ BOOLEAN_BEHAVIOR_GOOD = "setEditorVisibility(canEdit);"
 
 # Branch policy markers.
 BRANCH_PROTECTED_MAIN = "main/master 是保护分支"
-BRANCH_DEV_BASE = "基于 dev 分支"
-BRANCH_DEPLOY_TEST = "deploy/test"
-BRANCH_SYNC_ALL = "保持 main/master/dev/deploy/* 同步"
-BRANCH_COMMIT_ON_DEV = "确认当前分支为 dev"
+BRANCH_FEATURE_BRANCH = "基于最新 main checkout 一个临时分支"
+BRANCH_NO_PERSISTENT_DEV = "无长期 dev 分支"
+BRANCH_COMMIT_ON_BRANCH = "commit 到该临时分支"
+BRANCH_USER_MERGE = "由用户主动触发"
+BRANCH_DELETE_AFTER_MERGE = "merge 完成后删除"

@@ -346,21 +346,37 @@ class PlanTddTasksContractTest(unittest.TestCase):
         )[0]
         for value in (
             shared.BRANCH_PROTECTED_MAIN,
-            shared.BRANCH_DEV_BASE,
-            shared.BRANCH_DEPLOY_TEST,
-            shared.BRANCH_SYNC_ALL,
+            shared.BRANCH_FEATURE_BRANCH,
+            shared.BRANCH_NO_PERSISTENT_DEV,
+            shared.BRANCH_COMMIT_ON_BRANCH,
+            shared.BRANCH_USER_MERGE,
+            shared.BRANCH_DELETE_AFTER_MERGE,
         ):
             with self.subTest(value=value):
                 self.assertIn(value, discipline)
+        self.assertNotIn("deploy/test", SKILL)
+        self.assertNotIn("基于 dev 分支", SKILL)
         publish = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
             "## 10. 重跑上限", 1
         )[0]
-        self.assertIn(shared.BRANCH_COMMIT_ON_DEV, publish)
-        self.assertIn("不在 dev 时停止并转人工", publish)
+        self.assertIn("当前分支不是 main", publish)
+        self.assertIn("停止并转人工", publish)
+        self.assertNotIn("确认当前分支为 dev", publish)
 
-    def test_init_commit_requires_dev_branch(self) -> None:
-        self.assertIn("dev 分支", INIT_REFERENCE)
+    def test_init_commit_requires_non_main_branch(self) -> None:
+        self.assertIn("非 main 分支", INIT_REFERENCE)
         self.assertIn("转人工", INIT_REFERENCE)
+        self.assertNotIn("落在 dev 分支", INIT_REFERENCE)
+
+    def test_branch_policy_old_markers_removed(self) -> None:
+        for name in (
+            "BRANCH_DEV_BASE",
+            "BRANCH_DEPLOY_TEST",
+            "BRANCH_SYNC_ALL",
+            "BRANCH_COMMIT_ON_DEV",
+        ):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(shared, name))
 
     def test_self_explaining_reference_has_exactly_four_pairs(self) -> None:
         self.assertTrue(SELF_EXPLAINING_PATH.is_file())

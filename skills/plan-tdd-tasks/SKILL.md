@@ -26,7 +26,7 @@ description: 单 feature 开发全流程主 agent：分析、规划（AC 清单�
 - **一次只处理一个 feature**。用户提出多个需求时，先确认优先级，逐个执行。
 - **规划不落盘**：设计意图、实现思路、TDD 计划只存在于对话中，绝不写入任何文件。唯一落盘的规划产物是 AC 清单、范围声明与 test-command.txt（§4）。
 - 任务期间**不得执行 `git commit`，不得执行 `git add`/stage**（§9 最终提交与 §12 init 收尾提交是仅有的例外）；不得 push。
-- **分支策略**：main/master 是保护分支，不直接提交。所有开发基于 dev 分支：发版完成后基于最新 main checkout dev；dev 开发完成后 merge 到 deploy/test 发布测试环境；迭代完成后将 dev merge/MR 回 main，保持 main/master/dev/deploy/* 同步。任务开始前若当前分支不是 dev，先与用户确认后切换；最终提交必须落在 dev。
+- **分支策略**：main/master 是保护分支，不直接提交。开发基于最新 main checkout 一个临时分支（无长期 dev 分支）；开发、修复、调整完成后 commit 到该临时分支。由用户主动触发 merge 到 main；merge 完成后删除本地临时分支，main 始终保持最新且工作树 clean。任务开始前先基于最新 main checkout 一个临时分支；最终提交必须落在该临时分支。
 - 任务开始前工作树必须 clean（`git status --porcelain` 为空）。非 clean 时先与用户确认基线：是并入本次任务还是先处理现有改动，确认前不开始。
 - 唯一临时目录：`${PROJECT_ROOT}/.tmp/<task-id>/`。任务开始前若存在同名残留，先与用户确认后删除。任务结束（含失败、放弃）后清理该目录。
 - `${SKILL_ROOT}` 是包含当前已加载 `SKILL.md` 的目录。本 skill 的脚本固定为 `${SKILL_ROOT}/scripts/check-scope.sh` 与 `${SKILL_ROOT}/scripts/run-full-tests.sh`，**以绝对路径调用**；禁止在业务仓库复制、改写或新建这两个脚本，禁止探索业务仓库中的同名文件。
@@ -159,7 +159,7 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 ```
 
 2. `run-full-tests: PASS` 后进入提交收尾：
-   - 确认当前分支为 dev（§2 分支策略）；不在 dev 时停止并转人工；
+   - 确认当前分支不是 main（§2 分支策略，main 是保护分支）；在 main 时停止并转人工；
    - 若本次任务修改了 project-map.md 已记录的主题（§11.4 更新时机），先更新对应小节；
    - 地图处理完成后，再次运行 §6 的 check-scope.sh；只有退出码 0 才继续，失败按 §6 分流；
    - `git add` 只加范围声明内的文件（`files:` + `infra:`）；

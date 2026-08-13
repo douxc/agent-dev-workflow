@@ -206,11 +206,15 @@ class DocumentationContractTest(unittest.TestCase):
     def test_documents_branch_policy(self) -> None:
         self.assert_readme_contains(
             shared.BRANCH_PROTECTED_MAIN,
-            shared.BRANCH_DEV_BASE,
-            shared.BRANCH_DEPLOY_TEST,
-            shared.BRANCH_SYNC_ALL,
-            "最终提交必须落在 dev",
+            shared.BRANCH_FEATURE_BRANCH,
+            shared.BRANCH_NO_PERSISTENT_DEV,
+            shared.BRANCH_COMMIT_ON_BRANCH,
+            shared.BRANCH_USER_MERGE,
+            shared.BRANCH_DELETE_AFTER_MERGE,
+            "最终提交必须落在临时分支",
         )
+        self.assertNotIn("deploy/test", self.readme)
+        self.assertNotIn("基于 dev 分支", self.readme)
 
 
 if __name__ == "__main__":
