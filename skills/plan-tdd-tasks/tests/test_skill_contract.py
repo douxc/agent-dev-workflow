@@ -118,7 +118,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
         )
 
     def test_scope_violation_reverts_before_replanning(self) -> None:
-        section = SKILL.split("## 6. 机械范围检查与产出包", 1)[1].split(
+        section = SKILL.split("## 6. 机械范围检查、全量测试与产出包", 1)[1].split(
             "## 7. 盲测派发", 1
         )[0]
         accidental = section.split(f"**{shared.SCOPE_ACCIDENTAL}**", 1)[1].split(
@@ -134,7 +134,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, expansion)
 
     def test_scope_check_precedes_package_build(self) -> None:
-        section = SKILL.split("## 6. 机械范围检查与产出包", 1)[1].split(
+        section = SKILL.split("## 6. 机械范围检查、全量测试与产出包", 1)[1].split(
             "## 7. 盲测派发", 1
         )[0]
         self.assertIn(shared.SCOPE_BEFORE_PACKAGE, section)
@@ -155,8 +155,8 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assert_all("最多 2 轮", "强制人工", "不得自行开始第 3 轮")
 
     def test_full_test_failure_rechecks_only_when_package_changes(self) -> None:
-        section = SKILL.split("4. 全量测试 FAIL", 1)[1].split(
-            "## 10. 重跑上限", 1
+        section = SKILL.split("**全量测试（提交盲测前的项目级验证）**", 1)[1].split(
+            "## 7. 盲测派发", 1
         )[0]
         package_change = section.split(
             f"**{shared.FULL_FAIL_PACKAGE_CHANGE}**", 1
@@ -164,12 +164,11 @@ class PlanTddTasksContractTest(unittest.TestCase):
         no_package_change = section.split(
             f"**{shared.FULL_FAIL_NO_PACKAGE_CHANGE}**", 1
         )[1]
-        for value in ("回到 §6", "§7", "全新盲测者", "轮次 +1"):
+        for value in ("从步骤 1 重新检查", "回退重规划", "§10 轮次上限"):
             with self.subTest(branch="package-change", value=value):
                 self.assertIn(value, package_change)
         for value in (
-            "保留上一轮双 PASS",
-            "直接重试本节全量测试",
+            "直接重试本步",
             "不消耗盲测轮次",
         ):
             with self.subTest(branch="no-package-change", value=value):
@@ -179,7 +178,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assert_all("`git add` 只加范围声明内的文件", "一次 `git commit`")
 
     def test_final_scope_recheck_precedes_staging(self) -> None:
-        section = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+        section = SKILL.split("## 9. 提交", 1)[1].split(
             "## 10. 重跑上限", 1
         )[0]
         self.assertIn(shared.FINAL_SCOPE_RECHECK, section)
@@ -288,7 +287,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
 
     def test_cross_reference_corrections(self) -> None:
         self.assertIn("§9 最终提交与 §12 init 收尾提交是仅有的例外", SKILL)
-        self.assertIn("全量留给 §9 最终门禁", SKILL)
+        self.assertIn("全量在 §6 提交盲测前运行恰好 1 遍", SKILL)
         self.assertNotIn("§8 最终提交", SKILL)
 
     def test_blind_phase_is_pure_static_no_test_execution(self) -> None:
@@ -448,7 +447,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, discipline)
         self.assertNotIn("deploy/test", SKILL)
         self.assertNotIn("基于 dev 分支", SKILL)
-        publish = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+        publish = SKILL.split("## 9. 提交", 1)[1].split(
             "## 10. 重跑上限", 1
         )[0]
         self.assertIn("当前分支不是 main", publish)
@@ -577,7 +576,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, SKILL)
 
     def test_final_section_reframes_branch_check_as_defensive(self) -> None:
-        section = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+        section = SKILL.split("## 9. 提交", 1)[1].split(
             "## 10. 重跑上限", 1
         )[0]
         self.assertIn("防御性", section)
@@ -613,7 +612,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, discipline)
 
     def test_package_build_script_wiring(self) -> None:
-        section = SKILL.split("## 6. 机械范围检查与产出包", 1)[1].split(
+        section = SKILL.split("## 6. 机械范围检查、全量测试与产出包", 1)[1].split(
             "## 7. 盲测派发", 1
         )[0]
         self.assertIn(
@@ -627,7 +626,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
 
     def test_disagreement_script_wiring(self) -> None:
         section = SKILL.split("## 8. 分歧处理", 1)[1].split(
-            "## 9. 全量测试与提交", 1
+            "## 9. 提交", 1
         )[0]
         for value in (
             f"{shared.SCRIPT_DECIDE_VERDICTS} {shared.FLAG_VERDICT_A} "
@@ -642,7 +641,7 @@ class PlanTddTasksContractTest(unittest.TestCase):
                 self.assertIn(value, section)
 
     def test_stage_scope_script_wiring(self) -> None:
-        section = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+        section = SKILL.split("## 9. 提交", 1)[1].split(
             "## 10. 重跑上限", 1
         )[0]
         self.assertIn(
@@ -654,6 +653,11 @@ class PlanTddTasksContractTest(unittest.TestCase):
         )
         self.assertIn("变更集 ⊆ 声明集", section)
         self.assertIn("暂存集 == 变更集验证", section)
+
+    def test_final_step_runs_no_full_tests(self) -> None:
+        section = SKILL.split("## 9. 提交", 1)[1].split("## 10. 重跑上限", 1)[0]
+        self.assertNotIn("run-full-tests.sh", section)
+        self.assertNotIn("运行全量测试", section)
 
 
 if __name__ == "__main__":

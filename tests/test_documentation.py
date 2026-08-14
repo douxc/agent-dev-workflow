@@ -91,9 +91,10 @@ class DocumentationContractTest(unittest.TestCase):
     def test_documents_blind_phase_static_and_skip(self) -> None:
         self.assert_readme_contains(
             "盲测阶段是纯静态只读复核",
+            "提交盲测前",
             "字面 `SKIP`",
             "主动询问用户是否跳过测试执行",
-            "最终门禁",
+            "§9 不再执行测试",
         )
         self.assertNotIn("test-run.log", self.readme)
 
