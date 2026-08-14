@@ -132,10 +132,10 @@ stdout 即数据（无状态行）：NUL 分隔记录 `M|<path>`（相对 base �
 ### `run-full-tests.sh`
 
 ```text
-run-full-tests.sh --project-root <dir> --test-cmd <string> [--workdir <dir>] [--log-file <path>]
+run-full-tests.sh --project-root <dir> --test-cmd <string> [--workdir <dir>] [--log-file <path>] [--log-max-bytes <n>]
 ```
 
-`--test-cmd` 经 `sh -c` 执行（"全量"由主 agent 分析期确定并写入 `test-command.txt`，规则：必须覆盖仓库完整测试套件，禁止只跑新增测试）。相对 `--log-file` 始终以 `--project-root` 为基准解析，不受 `--workdir` 影响。输出与日志一致，末行状态。`test-command.txt` 为字面 `SKIP`（用户同意跳过测试）时主 skill 不调用本脚本：
+`--test-cmd` 经 `sh -c` 执行（"全量"由主 agent 分析期确定并写入 `test-command.txt`，规则：必须覆盖仓库完整测试套件，禁止只跑新增测试）。相对 `--log-file` 始终以 `--project-root` 为基准解析，不受 `--workdir` 影响。日志模式下脚本把状态行（`run-full-tests: PASS` / `run-full-tests: FAIL (exit N)`）写入日志末行（§9 提交门禁读取），随后回放日志到 stdout——stdout 与日志逐字节一致，状态行只出现一次。日志默认只保留最近 10 MiB 输出（`--log-max-bytes` 可调，`0` 为不限），输出再大也不会撑满磁盘。**禁止把脚本 stdout 重定向或追加到同一个日志文件**：脚本会回放日志内容，追加会形成自追加循环（`cat f >> f`），文件无限增长直到写满磁盘。`test-command.txt` 为字面 `SKIP`（用户同意跳过测试）时主 skill 不调用本脚本：
 
 | 退出码 | 状态行 |
 |---|---|

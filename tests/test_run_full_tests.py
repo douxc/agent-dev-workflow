@@ -102,10 +102,10 @@ class RunFullTestsTest(unittest.TestCase):
             msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
         )
         self.assertEqual(project_log.read_text(encoding="utf-8"),
-                         "relative log\n")
+                         "relative log\n\n" + shared.RUN_FULL_TESTS_PASS + "\n")
         self.assertFalse((workdir / "logs" / "full-tests.log").exists())
 
-    def test_log_file_captures_output_and_status_is_last(self) -> None:
+    def test_log_file_ends_with_status_line(self) -> None:
         log_file = self.temp / "log" / "full-tests.log"
         log_file.parent.mkdir()
         result = self.run_script(
@@ -114,13 +114,59 @@ class RunFullTestsTest(unittest.TestCase):
             shared.FLAG_LOG_FILE, str(log_file),
         )
         self.assertEqual(result.returncode, shared.EXIT_PASS)
-        self.assertIn("hello from tests", log_file.read_text(encoding="utf-8"))
-        # Console output equals log content plus the status line.
-        self.assertEqual(
-            result.stdout,
-            log_file.read_text(encoding="utf-8")
-            + shared.RUN_FULL_TESTS_PASS + "\n",
+        log_text = log_file.read_text(encoding="utf-8")
+        self.assertIn("hello from tests", log_text)
+        # The script writes the status line into the log (the §9 gate reads
+        # the last non-empty line there); console output equals the final log
+        # byte for byte (replay of the log, never a second status print).
+        self.assertTrue(log_text.rstrip().endswith(shared.RUN_FULL_TESTS_PASS))
+        self.assertEqual(result.stdout, log_text)
+
+    def test_log_file_ends_with_fail_status(self) -> None:
+        log_file = self.temp / "log" / "full-tests.log"
+        log_file.parent.mkdir()
+        result = self.run_script(
+            shared.FLAG_PROJECT_ROOT, str(self.project),
+            shared.FLAG_TEST_CMD, "python3 -c 'exit(1)'",
+            shared.FLAG_LOG_FILE, str(log_file),
         )
+        self.assertEqual(result.returncode, shared.EXIT_FAIL)
+        log_text = log_file.read_text(encoding="utf-8")
+        self.assertTrue(log_text.rstrip().endswith(
+            "run-full-tests: FAIL (exit 1)"))
+        self.assertEqual(result.stdout, log_text)
+
+    def test_log_capped_to_max_bytes(self) -> None:
+        log_file = self.temp / "log" / "full-tests.log"
+        log_file.parent.mkdir()
+        result = self.run_script(
+            shared.FLAG_PROJECT_ROOT, str(self.project),
+            shared.FLAG_TEST_CMD,
+            "python3 -c 'import sys; sys.stdout.write(\"x\" * 2_000_000)'",
+            shared.FLAG_LOG_FILE, str(log_file),
+            shared.FLAG_LOG_MAX_BYTES, "1024",
+        )
+        self.assertEqual(result.returncode, shared.EXIT_PASS)
+        log_text = log_file.read_text(encoding="utf-8")
+        # Only the most recent 1024 bytes of output survive, plus the
+        # separator newline and the status line; exit code still correct.
+        self.assertLessEqual(len(log_text),
+                             1024 + 1 + len(shared.RUN_FULL_TESTS_PASS) + 1)
+        self.assertTrue(log_text.startswith("x"))
+        self.assertTrue(log_text.rstrip().endswith(shared.RUN_FULL_TESTS_PASS))
+        self.assertEqual(result.stdout, log_text)
+
+    def test_invalid_log_max_bytes_usage_error(self) -> None:
+        log_file = self.temp / "log" / "full-tests.log"
+        log_file.parent.mkdir()
+        result = self.run_script(
+            shared.FLAG_PROJECT_ROOT, str(self.project),
+            shared.FLAG_TEST_CMD, "true",
+            shared.FLAG_LOG_FILE, str(log_file),
+            shared.FLAG_LOG_MAX_BYTES, "abc",
+        )
+        self.assertEqual(result.returncode, shared.EXIT_USAGE)
+        self.assertIn(shared.RUN_FULL_TESTS_USAGE, result.stdout)
 
     def test_compound_command_via_sh(self) -> None:
         result = self.run_script(

@@ -138,8 +138,11 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd "$(cat <package>/test-command.txt)" --log-file <package>/../full-tests.log
 ```
 
+- 脚本把状态行 `run-full-tests: PASS` / `run-full-tests: FAIL (exit N)` 写入 `full-tests.log` 末行（§9 提交门禁读取的就是这一行），随后把日志完整回放到 stdout——stdout 与日志逐字节一致，状态行只出现一次。
+- 日志默认只保留最近 10 MiB 输出（`--log-max-bytes` 可调，`0` 为不限），测试输出再大也不会撑满磁盘；失败上下文位于日志末尾，仍然可读。
+- **禁止**把本脚本 stdout 重定向或追加到同一个日志文件（`>> full-tests.log`、`tee -a` 均不可）：脚本会回放日志内容，追加会形成自追加循环（`cat f >> f`），文件无限增长直到写满磁盘。
 - `run-full-tests: PASS`：继续构建代码包。
-- FAIL：保留 `full-tests.log`，按修复是否改变盲审事实分流；全量失败不应通过扩大范围声明掩盖。
+- FAIL：保留截断后的 `full-tests.log`，按修复是否改变盲审事实分流；全量失败不应通过扩大范围声明掩盖。
   - **代码、测试、AC 或 scope 发生变化**（全量不通过说明本次修改影响了其他模块，或前期范围规划有未覆盖）：修复后从步骤 1 重新检查，再重跑本步；若修复过程中发现需要改变范围或新增 AC，先按步骤 1 回退重规划。代码包事实变化而触发的重派计入 §10 轮次上限。
   - **只有环境或测试命令变化且代码包未变**：修复环境或 `test-command.txt` 后直接重试本步，不消耗盲测轮次。环境或测试命令修复最多重试 2 次；连续失败后停止并转人工处理。
 - `test-command.txt` 为字面 `SKIP`（§3.5 用户同意跳过）时不运行本步全量测试，提交门禁以用户显式同意替代，汇报中声明“测试未执行，用户同意跳过”。
