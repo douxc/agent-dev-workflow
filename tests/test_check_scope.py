@@ -25,6 +25,103 @@ def write_scope(path: Path, files: tuple, infra: tuple = ()) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+class CheckScopeListChangedTest(unittest.TestCase):
+    """--list-changed data mode: NUL records, no status line, exit 0/2."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.temp = Path(self.temp_dir.name)
+        self.repo = self.temp / "repo"
+        self.repo.mkdir()
+        git(self.repo, "init", "-q", "--initial-branch=main")
+        git(self.repo, "config", "user.name", "Test")
+        git(self.repo, "config", "user.email", "t@example.com")
+        (self.repo / "tracked.txt").write_text("base\n", encoding="utf-8")
+        git(self.repo, "add", "tracked.txt")
+        git(self.repo, "commit", "-qm", "init")
+        self.base = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+
+    def run_script(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [str(SCRIPT), *args], capture_output=True, text=True, check=False
+        )
+
+    def list_args(self) -> tuple:
+        return (
+            shared.FLAG_PROJECT_ROOT, str(self.repo),
+            shared.FLAG_BASE, self.base,
+            shared.FLAG_LIST_CHANGED,
+        )
+
+    def records(self, result: subprocess.CompletedProcess) -> set:
+        self.assertEqual(result.returncode, shared.EXIT_PASS,
+                         msg=f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
+        return {r for r in result.stdout.split("\0") if r}
+
+    def test_emits_tracked_and_new_records_nul_delimited(self) -> None:
+        (self.repo / "tracked.txt").write_text("modified\n", encoding="utf-8")
+        (self.repo / "src").mkdir()
+        (self.repo / "src" / "new.txt").write_text("new\n", encoding="utf-8")
+
+        result = self.run_script(*self.list_args())
+
+        self.assertEqual(
+            self.records(result),
+            {f"{shared.CHANGED_TRACKED}tracked.txt",
+             f"{shared.CHANGED_NEW}src/new.txt"},
+        )
+
+    def test_emits_no_status_line_in_data_mode(self) -> None:
+        (self.repo / "tracked.txt").write_text("modified\n", encoding="utf-8")
+        result = self.run_script(*self.list_args())
+        self.assertEqual(result.stdout.rstrip("\0"), f"{shared.CHANGED_TRACKED}tracked.txt")
+
+    def test_tmp_paths_excluded(self) -> None:
+        (self.repo / ".tmp" / "x" / "junk.txt").parent.mkdir(parents=True)
+        (self.repo / ".tmp" / "x" / "junk.txt").write_text("junk\n", encoding="utf-8")
+        result = self.run_script(*self.list_args())
+        self.assertEqual(self.records(result), set())
+
+    def test_unicode_space_and_tab_path_preserved(self) -> None:
+        unusual = "中文 file\tname.txt"
+        (self.repo / unusual).write_text("new\n", encoding="utf-8")
+        result = self.run_script(*self.list_args())
+        self.assertEqual(self.records(result), {f"{shared.CHANGED_NEW}{unusual}"})
+
+    def test_base_override_marks_later_commit_as_tracked(self) -> None:
+        (self.repo / "added-later.txt").write_text("new\n", encoding="utf-8")
+        git(self.repo, "add", "added-later.txt")
+        git(self.repo, "commit", "-qm", "second")
+        result = self.run_script(*self.list_args())
+        self.assertEqual(self.records(result),
+                         {f"{shared.CHANGED_TRACKED}added-later.txt"})
+
+    def test_list_changed_exclusive_with_scope_file(self) -> None:
+        result = self.run_script(
+            shared.FLAG_PROJECT_ROOT, str(self.repo),
+            shared.FLAG_SCOPE_FILE, str(self.repo / "scope.md"),
+            shared.FLAG_BASE, self.base,
+            shared.FLAG_LIST_CHANGED,
+        )
+        self.assertEqual(result.returncode, shared.EXIT_USAGE)
+
+    def test_usage_errors_exit_two(self) -> None:
+        cases = [
+            (),
+            (shared.FLAG_PROJECT_ROOT, str(self.repo)),
+            (shared.FLAG_PROJECT_ROOT, str(self.temp / "missing"),
+             shared.FLAG_LIST_CHANGED),
+            (shared.FLAG_PROJECT_ROOT, str(self.repo),
+             shared.FLAG_LIST_CHANGED, shared.FLAG_BASE, "not-a-rev"),
+        ]
+        for args in cases:
+            with self.subTest(args=args):
+                result = self.run_script(*args)
+                self.assertEqual(result.returncode, shared.EXIT_USAGE,
+                                 msg=f"args={args}\n{result.stdout}{result.stderr}")
+
+
 class CheckScopeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()

@@ -31,7 +31,7 @@ description: 单 feature 开发全流程主 agent：分析、规划（AC 清单�
 - 任务开始前工作树必须 clean（`git status --porcelain` 为空）。非 clean 时先与用户确认基线：是并入本次任务还是先处理现有改动，确认前不开始。
 - **环境不变式（三条）**：在临时分支上（§2 分支策略）；工作树只含本任务改动（`.tmp/<task-id>/` 除外）；`base` 与分支起点一致（`HEAD == base`）。任一破坏：立即**终止**流程并转人工处理，**不自愈**、不自行修复。由准入闸门的 `check-env.sh` 机械校验（§4.4）。
 - 唯一临时目录：`${PROJECT_ROOT}/.tmp/<task-id>/`。任务开始前若存在同名残留，先与用户确认后删除。任务结束（含失败、放弃）后清理该目录。
-- `${SKILL_ROOT}` 是包含当前已加载 `SKILL.md` 的目录。本 skill 的脚本固定为 `${SKILL_ROOT}/scripts/` 下五个：`check-scope.sh`、`run-full-tests.sh`（§6/§9）与 `check-env.sh`、`validate-ac.sh`、`parse-verdict.sh`（§4.4/§7），**以绝对路径调用**；禁止在业务仓库复制、改写或新建这些脚本，禁止探索业务仓库中的同名文件。
+- `${SKILL_ROOT}` 是包含当前已加载 `SKILL.md` 的目录。本 skill 的脚本固定为 `${SKILL_ROOT}/scripts/` 下八个：`check-scope.sh`（§6/§9）、`build-package.sh`（§6）、`run-full-tests.sh`（§7/§9）、`decide-verdicts.sh`（§8）、`stage-scope.sh`（§9）与 `check-env.sh`、`validate-ac.sh`、`parse-verdict.sh`（§4.4/§7），**以绝对路径调用**；禁止在业务仓库复制、改写或新建这些脚本，禁止探索业务仓库中的同名文件。
 
 ## 3. 分析
 
@@ -144,10 +144,13 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 └── code/                # 全部变更文件的完整副本（仓库相对布局）
 ```
 
-范围检查 PASS 后才执行以下步骤：
+范围检查 PASS 后运行（绝对路径）：
 
-1. 生成 `diff.txt`：`git diff <base>` 输出跟踪文件变更；对每个未跟踪新文件追加块 `== new: <path> ==` 加完整内容。`code/` 是盲测者的事实来源，`diff.txt` 仅作辅助。
-2. 构建 `code/`：将范围检查确认的变更文件逐一复制到 `code/` 下对应相对路径（project-map.md 除外——项目元数据，非盲测输入，不进入 `code/`，§11）。
+```text
+${SKILL_ROOT}/scripts/build-package.sh --project-root <PROJECT_ROOT> --package <package> --base <base>
+```
+
+脚本内部复用 check-scope.sh 的变更集计算（`--list-changed`，单一事实源）生成 `diff.txt`（`git diff <base>` 输出跟踪文件变更；对每个未跟踪新文件追加块 `== new: <path> ==` 加完整内容）并构建 `code/`（将变更文件逐一复制到 `code/` 下对应相对路径；project-map.md 除外——项目元数据，非盲测输入，不进入 `code/`，§11；已删除文件无副本，删除在 diff.txt 中可见）。`code/` 是盲测者的事实来源，`diff.txt` 仅作辅助。
 
 ## 7. 盲测派发
 
@@ -165,6 +168,14 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 - 先等两个 verdict 都收到再判断。收到空结果或明显非 verdict 格式的结果时，只重派那一个子代理（新上下文），不整轮重跑。
 
 ## 8. 分歧处理
+
+先机械判定（绝对路径）：
+
+```text
+${SKILL_ROOT}/scripts/decide-verdicts.sh --verdict-a <review>/A.md --verdict-b <review>/B.md
+```
+
+`decide-verdicts: DOUBLE-PASS` → §9 全量测试；`decide-verdicts: DOUBLE-FAIL` → 双 fail（下）；`decide-verdicts: SPLIT` → 相左（下）；`decide-verdicts: MALFORMED (<文件>)` → 只重派那一个盲测者（§7 步骤 3，全新上下文）。
 
 | A \ B | pass | fail |
 |---|---|---|
@@ -184,12 +195,13 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 
 `test-command.txt` 为字面 `SKIP`（§3.5 用户同意跳过）时不运行本节全量测试，提交门禁以用户显式同意替代，汇报中声明"测试未执行，用户同意跳过"。
 
-2. `run-full-tests: PASS` 后进入提交收尾：
-   - **防御性复检**：确认当前分支不是 main（§2 分支策略，main 是保护分支）；在 main 时停止并转人工；
-   - 再次运行 §6 的 check-scope.sh；只有退出码 0 才继续，失败按 §6 分流；
-   - `git add` 只加范围声明内的文件（`files:` + `infra:`）；
-   - 一次 `git commit`，信息包含 task 名与 AC 范围；
-   - 确认工作树 clean（`git status --porcelain` 为空，`.tmp/` 除外）。
+2. `run-full-tests: PASS` 后进入提交收尾，运行 stage-scope.sh（绝对路径）机械执行全部收尾步骤：
+
+```text
+${SKILL_ROOT}/scripts/stage-scope.sh --project-root <PROJECT_ROOT> --package <package> --base <base> --branch <BRANCH> --message "<msg>"
+```
+
+脚本内部按序执行：**防御性复检**——确认当前分支不是 main（§2 分支策略，main 是保护分支）；在 main 时停止并转人工；再次运行 §6 的 check-scope.sh，只有退出码 0 才继续，失败按 §6 分流；测试门禁——`test-command.txt` 为字面 `SKIP`（§3.5 用户同意跳过）时以用户显式同意替代，否则 `full-tests.log` 末行须为 `run-full-tests: PASS`；`git add` 只加范围声明内的文件（`files:` + `infra:`，check-scope PASS 保证变更集 ⊆ 声明集）；暂存集 == 变更集验证（未声明暂存或遗漏变更都 FAIL）；一次 `git commit`，信息包含 task 名与 AC 范围（`--message` 由主 agent 组织）；确认工作树 clean（`git status --porcelain` 为空，`.tmp/` 除外）。
 3. 清理 `${PROJECT_ROOT}/.tmp/<task-id>/`，向用户汇报：AC 清单、两份 verdict 摘要、全量结果、commit sha。
 4. 全量测试 FAIL：保留 `full-tests.log`，按修复是否改变盲审事实分流；全量失败不应通过扩大范围声明掩盖。
    - **代码、测试、AC 或 scope 发生变化**：回到 §6 重新检查并产包，再到 §7 重新派发全新盲测者（不得复用上一轮），轮次 +1。

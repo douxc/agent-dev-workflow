@@ -10,6 +10,7 @@ die() {
 project_root=
 scope_file=
 base=HEAD
+list_changed=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -28,25 +29,49 @@ while [ "$#" -gt 0 ]; do
             base=$2
             shift 2
             ;;
+        --list-changed)
+            list_changed=1
+            shift
+            ;;
         *) die "unknown argument: $1" ;;
     esac
 done
 
 [ -n "$project_root" ] || die "check-scope requires --project-root"
-[ -n "$scope_file" ] || die "check-scope requires --scope-file"
 [ -d "$project_root" ] || die "project root is not a directory: $project_root"
 root=$(CDPATH= cd -P "$project_root" && pwd -P)
-
-case "$scope_file" in
-    /*) scope_path=$scope_file ;;
-    *) scope_path=$root/$scope_file ;;
-esac
-[ -f "$scope_path" ] || die "scope file not found: $scope_path"
 
 git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
     die "not a Git worktree: $root"
 git -C "$root" rev-parse --verify "$base^{commit}" >/dev/null 2>&1 ||
     die "invalid base revision: $base"
+
+# --list-changed data mode: NUL-delimited records on stdout, no status line,
+# no scope validation. M|<path> = tracked change vs base, N|<path> = untracked
+# new file; `.tmp/` is unconditionally excluded. Callers check the exit code.
+if [ "$list_changed" -eq 1 ]; then
+    [ -n "$scope_file" ] && die "--list-changed is exclusive with --scope-file"
+    while IFS= read -r -d '' path; do
+        case "$path" in
+            .tmp | .tmp/*) continue ;;
+        esac
+        printf 'M|%s\0' "$path"
+    done < <(git -C "$root" diff --name-only -z "$base")
+    while IFS= read -r -d '' path; do
+        case "$path" in
+            .tmp | .tmp/*) continue ;;
+        esac
+        printf 'N|%s\0' "$path"
+    done < <(git -C "$root" ls-files --others --exclude-standard -z)
+    exit 0
+fi
+
+[ -n "$scope_file" ] || die "check-scope requires --scope-file"
+case "$scope_file" in
+    /*) scope_path=$scope_file ;;
+    *) scope_path=$root/$scope_file ;;
+esac
+[ -f "$scope_path" ] || die "scope file not found: $scope_path"
 
 # Declared set: `- ` items under the `files:` and `infra:` sections. Any other
 # marker line (task:, base:, 约束:, ...) ends the current section.

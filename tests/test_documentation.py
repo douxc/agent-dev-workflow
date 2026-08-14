@@ -295,6 +295,37 @@ class DocumentationContractTest(unittest.TestCase):
             "bash -n skills/plan-tdd-tasks/scripts/parse-verdict.sh",
         )
 
+    def test_documents_mechanical_workflow_scripts(self) -> None:
+        self.assert_readme_contains(
+            shared.SCRIPT_BUILD_PACKAGE,
+            shared.SCRIPT_STAGE_SCOPE,
+            shared.SCRIPT_DECIDE_VERDICTS,
+            shared.FLAG_LIST_CHANGED,
+            shared.FLAG_PACKAGE,
+            shared.FLAG_MESSAGE,
+            shared.FLAG_VERDICT_A,
+            shared.FLAG_VERDICT_B,
+            shared.BUILD_PACKAGE_PASS,
+            shared.STAGE_SCOPE_PASS,
+            shared.STAGE_SCOPE_SKIP,
+            shared.DECIDE_DOUBLE_PASS,
+            shared.DECIDE_DOUBLE_FAIL,
+            shared.DECIDE_SPLIT,
+            shared.DECIDE_MALFORMED,
+            shared.NEW_FILE_MARKER,
+            "M|<path>",
+            "N|<path>",
+            "stdout 即数据（无状态行）",
+            "恰好一次 `git commit -m <msg>`",
+        )
+
+    def test_documents_workflow_script_validation_commands(self) -> None:
+        self.assert_readme_contains(
+            "bash -n skills/plan-tdd-tasks/scripts/build-package.sh",
+            "bash -n skills/plan-tdd-tasks/scripts/stage-scope.sh",
+            "bash -n skills/plan-tdd-tasks/scripts/decide-verdicts.sh",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

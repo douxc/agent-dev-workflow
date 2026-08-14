@@ -14,6 +14,9 @@ SCRIPT_RUN_FULL_TESTS = "run-full-tests.sh"
 SCRIPT_CHECK_ENV = "check-env.sh"
 SCRIPT_VALIDATE_AC = "validate-ac.sh"
 SCRIPT_PARSE_VERDICT = "parse-verdict.sh"
+SCRIPT_BUILD_PACKAGE = "build-package.sh"
+SCRIPT_STAGE_SCOPE = "stage-scope.sh"
+SCRIPT_DECIDE_VERDICTS = "decide-verdicts.sh"
 
 # Flags.
 FLAG_PROJECT_ROOT = "--project-root"
@@ -26,6 +29,11 @@ FLAG_BRANCH = "--branch"
 FLAG_AC_FILE = "--ac-file"
 FLAG_VERDICT_FILE = "--verdict-file"
 FLAG_PROFILE = "-p"
+FLAG_LIST_CHANGED = "--list-changed"
+FLAG_PACKAGE = "--package"
+FLAG_MESSAGE = "--message"
+FLAG_VERDICT_A = "--verdict-a"
+FLAG_VERDICT_B = "--verdict-b"
 
 # Exit codes.
 EXIT_PASS = 0
@@ -56,6 +64,26 @@ AC_CHECK_FAIL = "ac-check: FAIL"
 VERDICT_PARSE_PASS = "verdict-parse: PASS"
 VERDICT_PARSE_FAIL = "verdict-parse: FAIL"
 VERDICT_PARSE_MALFORMED = "verdict-parse: MALFORMED"
+
+# check-scope.sh --list-changed record prefixes (NUL-delimited).
+CHANGED_TRACKED = "M|"
+CHANGED_NEW = "N|"
+
+# build-package.sh status lines.
+BUILD_PACKAGE_PASS = "build-package: PASS"
+BUILD_PACKAGE_FAIL = "build-package: FAIL"
+NEW_FILE_MARKER = "== new: "
+
+# stage-scope.sh status lines.
+STAGE_SCOPE_PASS = "stage-scope: PASS"
+STAGE_SCOPE_FAIL = "stage-scope: FAIL"
+STAGE_SCOPE_SKIP = "test gate: SKIP"
+
+# decide-verdicts.sh status lines.
+DECIDE_DOUBLE_PASS = "decide-verdicts: DOUBLE-PASS"
+DECIDE_DOUBLE_FAIL = "decide-verdicts: DOUBLE-FAIL"
+DECIDE_SPLIT = "decide-verdicts: SPLIT"
+DECIDE_MALFORMED = "decide-verdicts: MALFORMED"
 
 # 范围声明 markers.
 SCOPE_MARKER_FILES = "files:"

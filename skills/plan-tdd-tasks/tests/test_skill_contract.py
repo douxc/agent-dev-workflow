@@ -590,13 +590,72 @@ class PlanTddTasksContractTest(unittest.TestCase):
         self.assertIn("准入闸门", AGENT)
         for value in (
             "${SKILL_ROOT}/scripts/check-scope.sh",
+            "${SKILL_ROOT}/scripts/build-package.sh",
             "${SKILL_ROOT}/scripts/run-full-tests.sh",
+            "${SKILL_ROOT}/scripts/decide-verdicts.sh",
+            "${SKILL_ROOT}/scripts/stage-scope.sh",
             "${SKILL_ROOT}/scripts/check-env.sh",
             "${SKILL_ROOT}/scripts/validate-ac.sh",
             "${SKILL_ROOT}/scripts/parse-verdict.sh",
         ):
             with self.subTest(value=value):
                 self.assertIn(value, AGENT)
+
+    def test_section_2_lists_eight_scripts(self) -> None:
+        discipline = SKILL.split("## 2. 通用纪律", 1)[1].split(
+            "## 3. 分析", 1
+        )[0]
+        self.assertIn("下八个", discipline)
+        for value in (
+            f"`{shared.SCRIPT_BUILD_PACKAGE}`（§6）",
+            f"`{shared.SCRIPT_DECIDE_VERDICTS}`（§8）",
+            f"`{shared.SCRIPT_STAGE_SCOPE}`（§9）",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, discipline)
+
+    def test_package_build_script_wiring(self) -> None:
+        section = SKILL.split("## 6. 机械范围检查与产出包", 1)[1].split(
+            "## 7. 盲测派发", 1
+        )[0]
+        self.assertIn(
+            f"{shared.SCRIPT_BUILD_PACKAGE} {shared.FLAG_PROJECT_ROOT} "
+            f"<PROJECT_ROOT> {shared.FLAG_PACKAGE} <package> "
+            f"{shared.FLAG_BASE} <base>",
+            section,
+        )
+        self.assertIn(shared.FLAG_LIST_CHANGED, section)
+        self.assertIn(shared.NEW_FILE_MARKER, section)
+
+    def test_disagreement_script_wiring(self) -> None:
+        section = SKILL.split("## 8. 分歧处理", 1)[1].split(
+            "## 9. 全量测试与提交", 1
+        )[0]
+        for value in (
+            f"{shared.SCRIPT_DECIDE_VERDICTS} {shared.FLAG_VERDICT_A} "
+            f"<review>/A.md {shared.FLAG_VERDICT_B} <review>/B.md",
+            shared.DECIDE_DOUBLE_PASS,
+            shared.DECIDE_DOUBLE_FAIL,
+            shared.DECIDE_SPLIT,
+            shared.DECIDE_MALFORMED,
+            "只重派那一个盲测者",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, section)
+
+    def test_stage_scope_script_wiring(self) -> None:
+        section = SKILL.split("## 9. 全量测试与提交", 1)[1].split(
+            "## 10. 重跑上限", 1
+        )[0]
+        self.assertIn(
+            f"{shared.SCRIPT_STAGE_SCOPE} {shared.FLAG_PROJECT_ROOT} "
+            f"<PROJECT_ROOT> {shared.FLAG_PACKAGE} <package> "
+            f"{shared.FLAG_BASE} <base> {shared.FLAG_BRANCH} <BRANCH> "
+            f'{shared.FLAG_MESSAGE} "<msg>"',
+            section,
+        )
+        self.assertIn("变更集 ⊆ 声明集", section)
+        self.assertIn("暂存集 == 变更集验证", section)
 
 
 if __name__ == "__main__":

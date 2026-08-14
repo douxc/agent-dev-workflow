@@ -121,6 +121,14 @@ changed = 工作树 diff vs base ∪ 未跟踪文件，减掉 `.tmp/` 下所有�
 | 1 | `scope-check: FAIL (n out-of-scope files)` |
 | 2 | 用法/校验错误（stderr 报错） |
 
+**数据模式 `--list-changed`**（build-package.sh / stage-scope.sh 读取变更集的单一事实源，`--scope-file` 互斥）：
+
+```text
+check-scope.sh --project-root <dir> --base <rev> --list-changed
+```
+
+stdout 即数据（无状态行）：NUL 分隔记录 `M|<path>`（相对 base 的跟踪变更）与 `N|<path>`（未跟踪新文件），`.tmp/` 下路径无条件排除；成功 exit 0，用法/git 状态错误 exit 2。
+
 ### `run-full-tests.sh`
 
 ```text
@@ -177,6 +185,49 @@ parse-verdict.sh --verdict-file <path>
 | 1 | `verdict-parse: FAIL` |
 | 2 | `verdict-parse: MALFORMED` |
 
+### `build-package.sh`
+
+```text
+build-package.sh --project-root <dir> --package <dir> [--base <rev>]
+```
+
+§6 范围检查 PASS 后生成盲测包：`diff.txt` = `git diff <base>` + 每个未跟踪新文件追加块 `== new: <path> ==` 加完整内容；`code/` = 全部变更文件按仓库相对路径的完整副本（project-map.md 除外——项目元数据，非盲测输入；已删除文件无副本，删除在 diff.txt 中可见）。变更集来自 `check-scope.sh --list-changed`（单一事实源）。末行状态：
+
+| 退出码 | 状态行 |
+|---|---|
+| 0 | `build-package: PASS (n files, m new)` |
+| 1 | `build-package: FAIL (…)`（变更集读取失败） |
+| 2 | 用法/校验错误（stderr 报错） |
+
+### `stage-scope.sh`
+
+```text
+stage-scope.sh --project-root <dir> --package <dir> --base <rev> --branch <branch> --message <msg>
+```
+
+§9 提交收尾闸门，把全部收尾步骤机械化：防御性分支复检（当前分支 == `--branch` 且非 main/master 保护分支）→ `HEAD == base` → 再次运行 §6 的 check-scope.sh → 测试门禁（`test-command.txt` 为字面 `SKIP` 时以用户同意替代，中间行 `test gate: SKIP (user consent)`；否则 `<package>/../full-tests.log` 末行必须为 `run-full-tests: PASS`）→ 只 `git add` 变更集（check-scope PASS 保证变更集 ⊆ 范围声明）→ 暂存集 == 变更集验证（未声明暂存或遗漏变更都 FAIL）→ 恰好一次 `git commit -m <msg>`（消息由主 agent 组织）→ 工作树 clean 复检（`.tmp/` 除外）。末行状态：
+
+| 退出码 | 状态行 |
+|---|---|
+| 0 | `stage-scope: PASS (commit <sha>)` |
+| 1 | `stage-scope: FAIL (…)` |
+| 2 | 用法/校验错误（stderr 报错） |
+
+### `decide-verdicts.sh`
+
+```text
+decide-verdicts.sh --verdict-a <path> --verdict-b <path>
+```
+
+§8 分歧判定：内部以绝对路径调用 parse-verdict.sh 解析两份 verdict，按 2×2 矩阵分类，主 agent 不目测 pass/fail。MALFORMED 时点名出错文件，主 agent 只重派那一个盲测者（§7 步骤 3）。末行状态：
+
+| 退出码 | 状态行 |
+|---|---|
+| 0 | `decide-verdicts: DOUBLE-PASS`（双 pass → §9） |
+| 1 | `decide-verdicts: DOUBLE-FAIL`（双 fail → 修复重派） |
+| 1 | `decide-verdicts: SPLIT`（相左 → 自辩 + 用户仲裁） |
+| 2 | `decide-verdicts: MALFORMED (<文件>)`（→ 只重派那一个） |
+
 ## 安装
 
 ```bash
@@ -225,6 +276,9 @@ python3 -m unittest discover -s skills/plan-tdd-tasks/tests -p 'test_*.py'
 python3 -m unittest discover -s skills/blind-review-tasks/tests -p 'test_*.py'
 bash -n install.sh
 bash -n skills/plan-tdd-tasks/scripts/check-scope.sh
+bash -n skills/plan-tdd-tasks/scripts/build-package.sh
+bash -n skills/plan-tdd-tasks/scripts/stage-scope.sh
+bash -n skills/plan-tdd-tasks/scripts/decide-verdicts.sh
 bash -n skills/plan-tdd-tasks/scripts/check-env.sh
 bash -n skills/plan-tdd-tasks/scripts/validate-ac.sh
 bash -n skills/plan-tdd-tasks/scripts/parse-verdict.sh
