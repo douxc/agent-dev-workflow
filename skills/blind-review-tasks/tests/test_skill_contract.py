@@ -30,9 +30,19 @@ class BlindReviewTasksContractTest(unittest.TestCase):
             "ac-list.md",
             "scope.md",
             "diff.txt",
+            "test-run.log",
             "code/",
             "不得读取 package 目录之外的 `.tmp` 内容",
             "verdict 每条证据必须指向包内路径",
+        )
+
+    def test_test_run_log_is_optional_citable_evidence(self) -> None:
+        self.assert_all(
+            "可选运行证据",
+            "引述",
+            "日志缺失",
+            "不影响任何静态检查结论",
+            "唯一允许的运行结论",
         )
 
     def test_check_1_ac_completeness(self) -> None:

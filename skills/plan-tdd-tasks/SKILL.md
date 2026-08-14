@@ -13,9 +13,9 @@ description: 单 feature 开发全流程主 agent：分析、规划（AC 清单�
 ① 分析 → ② 规划（AC 清单 + 范围声明 + test-command.txt）
 → ③ 准入闸门（check-env.sh 环境不变式 + validate-ac.sh AC 校验）
 → ④ TDD 实现与自测 → ⑤ check-scope.sh 机械范围检查 → ⑥ 产出包
-→ ⑦ 盲测 ×2（并行、只读、全新上下文）
+→ ⑦ 盲测阶段（执行 test-command → 盲测 ×2，并行、只读、全新上下文）
 → ⑧ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工）
-→ ⑨ run-full-tests.sh 全量测试（每次尝试最后、1 遍）
+→ ⑨ run-full-tests.sh 全量测试（最终门禁，本次尝试最后、恰 1 遍）
 → ⑩ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
 ```
 
@@ -39,7 +39,7 @@ description: 单 feature 开发全流程主 agent：分析、规划（AC 清单�
 2. **快速地图索引（目标 10–20 秒，软预算）**：从需求提取 1–3 个领域关键词；`${PROJECT_ROOT}/project-map.md` 存在时只搜索一次 `project-map.md`，输出匹配的领域、生产者、消费者与路径，并统一标记为“待源码验证的导航候选”。索引阶段不展开源码、不递归关系、不确定最终 scope。地图未命中时立即进入下一步；文件不存在时只提示运行 `/plan-tdd-tasks init` 并继续，普通任务不创建或更新地图。
 3. **源码分析（约 5 分钟，软预算）**：读取仓库指令（README、CONTRIBUTING 等），从地图候选开始验证并探索代码；地图不证明影响面完整，也不直接授权 scope。若一次工具调用跨过预算，在调用返回后进入检查点。
 4. **人工检查点**：约 5 分钟仍未形成稳定范围时暂停，向用户汇报“已确认、已排除、未确认、残余风险”，让用户选择继续探索或接受当前范围。继续探索时追加一个 5 分钟窗口，窗口结束仍未收敛则再次询问；接受当前范围时仅以已确认内容生成 AC 和 scope，未确认项只保留在对话风险说明中，不得写入 AC/scope 或伪装成已确认事实。
-5. **确定全量测试命令**：从 README、`package.json` scripts、`pyproject.toml`、Makefile 或既有测试目录推断仓库的完整测试套件命令；推断不出时直接询问用户。该命令稍后写入 `test-command.txt`，规则：**必须覆盖仓库完整测试套件，禁止只跑新增测试**；可以是复合命令（如 `python3 -m unittest discover && npm test`）。
+5. **确定全量测试命令**：从 README、`package.json` scripts、`pyproject.toml`、Makefile 或既有测试目录推断仓库的完整测试套件命令；可以是复合命令（如 `python3 -m unittest discover && npm test`）。该命令稍后写入 `test-command.txt`，规则：**必须覆盖仓库完整测试套件，禁止只跑新增测试**。推断不出（不存在 package.json 且无测试套件、执行环境或测试脚本）时**主动询问用户是否跳过测试执行**：同意跳过则 `test-command.txt` 写入字面 `SKIP`，后续 ⑦ 不执行、§9 以用户确认替代 PASS 门禁；不同意则用户提供命令或修复环境后继续。
 6. 记录 `base = HEAD`（当前提交 sha，范围检查基线）。
 7. 分析结论（目标、落点、测试命令、风险）只在对话中呈现，不落盘。普通任务不执行全局漂移判定，也不修改 project-map.md。
 
@@ -90,7 +90,7 @@ infra:
 
 ### 4.3 测试命令（`test-command.txt`）
 
-恰好一行非空内容：§3 确定的全量测试命令。
+恰好一行非空内容：§3 确定的全量测试命令；用户同意跳过测试执行时写入字面 `SKIP`（机器可识别，⑦ 与 ⑨ 检测到即跳过执行）。
 
 ### 4.4 准入闸门（环境 + AC 校验）
 
@@ -113,7 +113,7 @@ ${SKILL_ROOT}/scripts/validate-ac.sh --project-root <PROJECT_ROOT> --ac-file <pa
 ## 5. TDD 实现与自测
 
 - 严格 Red-Green-Refactor：先写一个失败测试并确认失败原因是行为缺失（Red）；再最小实现使其通过（Green）；仅在结构收益明确时重构，保持测试全绿。
-- 迭代期间只运行**定向测试**（正在写的那个或邻近的测试），不跑全量；全量留给 §9。
+- 迭代期间只运行**定向测试**（正在写的那个或邻近的测试），不跑全量；全量留给 ⑦ 盲测阶段执行与 §9 最终门禁。
 - 不得为通过而削弱测试、不得删除失败的测试、不得跳过 Red 阶段。
 - 实现只落在范围声明 `files:` + `infra:` 内的文件。
 - **自解释代码**：实现开始前完整读取 `${SKILL_ROOT}/references/self-explaining-code.md`，实现必须满足该标准。发现任一 Bad 模式时先按 reference 重构，完成自检后才能进入 §6。
@@ -140,6 +140,7 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 ├── scope.md
 ├── test-command.txt
 ├── diff.txt
+├── test-run.log         # §7 步骤 1 生成：test-command 执行日志（盲测运行证据；SKIP 模式无此文件）
 └── code/                # 全部变更文件的完整副本（仓库相对布局）
 ```
 
@@ -150,7 +151,10 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 
 ## 7. 盲测派发
 
-- 先按当前宿主选择原生子代理传输，不得混用：
+1. **执行 test-command（`test-command.txt` 非字面 `SKIP` 时）**：以绝对路径调用 `${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd "$(cat <package>/test-command.txt)" --log-file <package>/test-run.log`，产出全量套件执行日志；日志随包提供，是盲测者的运行证据。`SKIP`（§3.5 用户同意跳过）时跳过本步，包内无 `test-run.log`。
+   - `run-full-tests: PASS`：继续派发盲测者。
+   - FAIL：按 §9.4 分流——代码/测试/AC/scope 变化则修复后回到 §6 重新产包（轮次 +1）；仅环境或测试命令变化且代码包未变则修复后重试本步，最多 2 次，超限停止并转人工。
+2. **派发盲测者**：先按当前宿主选择原生子代理传输，不得混用：
   - **Claude Code**：在**同一条消息**中并行派发两个 `Agent(blind-review-tasks)` custom agent。
   - **Hermes**：在同一轮中并行发起两个 `delegate_task` child；每个 child 的任务开头要求加载 `blind-review-tasks` skill，并严格遵守其静态只读规则。Hermes child 继承父代理 toolsets，盲测者只读是**指令约束而非 harness 强制**，即使写入或执行工具可见也不得使用。
   - 当前宿主传输不可用、无法创建两个全新上下文或无法认证结果来源时 **fail closed**：停止流程并向用户报告，不得在主上下文中冒充盲测者。
@@ -172,11 +176,13 @@ ${SKILL_ROOT}/scripts/check-scope.sh --project-root <PROJECT_ROOT> --scope-file 
 
 ## 9. 全量测试与提交
 
-1. 双 pass 后运行全量测试（绝对路径，每次尝试最后执行、恰好 1 遍）：
+1. 双 pass 后运行全量测试——最终门禁（绝对路径，每次尝试最后执行、恰好 1 遍；同一命令已在 §7 步骤 1 执行过一次作为盲测证据）：
 
 ```text
 ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd "$(cat <package>/test-command.txt)" --log-file <package>/../full-tests.log
 ```
+
+`test-command.txt` 为字面 `SKIP`（§3.5 用户同意跳过）时不运行本节全量测试，提交门禁以用户显式同意替代，汇报中声明"测试未执行，用户同意跳过"。
 
 2. `run-full-tests: PASS` 后进入提交收尾：
    - **防御性复检**：确认当前分支不是 main（§2 分支策略，main 是保护分支）；在 main 时停止并转人工；
@@ -193,7 +199,7 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 
 - 盲测重跑最多 **2 轮**：第 1 轮双 fail → 修复 → 第 2 轮；第 2 轮仍双 fail → **强制人工**：呈交两份 verdict 与修改摘要，由用户选择（继续修 / 接受现状 / 放弃任务）。超过上限自动停止，不得自行开始第 3 轮。
 - 任意一轮出现相左 → 按 §8 自辩后人工仲裁，仲裁结果不消耗重跑轮次。
-- 全量测试失败后，只有代码包事实变化而触发的重派计入轮次上限。
+- 盲测阶段执行（§7 步骤 1）或 §9 全量测试失败后，只有代码包事实变化而触发的重派计入轮次上限；环境或测试命令修复不消耗轮次。
 
 ## 11. project-map.md（项目地图：项目的索引）
 

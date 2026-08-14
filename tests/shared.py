@@ -83,6 +83,7 @@ PACKAGE_FILES = (
     "scope.md",
     "test-command.txt",
     "diff.txt",
+    "test-run.log",
     "code",
 )
 TMP_ROOT = ".tmp"

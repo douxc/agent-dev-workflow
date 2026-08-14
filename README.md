@@ -13,13 +13,15 @@
 ① 主 agent 分析 → ② 规划（AC 清单 + 范围声明 + test-command.txt，规划不落盘）
 → ③ 准入闸门（check-env.sh 环境不变式 + validate-ac.sh AC 校验）
 → ④ TDD 实现与自测 → ⑤ 先运行机械范围检查 → ⑥ 产出包
-→ ⑦ 盲测 ×2（并行、只读、全新上下文，输入只有 AC/代码/测试/范围声明）
+→ ⑦ 盲测阶段（执行 test-command → 盲测 ×2，并行、只读、全新上下文，输入只有 AC/代码/测试/范围声明 + test-run.log）
 → ⑧ 分歧处理（双 pass 继续 / 双 fail 只给证据重修 / 相左自辩后人工仲裁）
-→ ⑨ run-full-tests.sh 全量测试（每次尝试最后、恰好 1 遍）
+→ ⑨ run-full-tests.sh 全量测试（最终门禁，每次尝试最后、恰好 1 遍）
 → ⑩ 最终范围复检 + git add 范围内文件 + 一次 commit → 清理 → 汇报
 ```
 
 重跑上限：盲测最多 2 轮，超限强制人工。
+
+盲测阶段先由主 agent 执行 `test-command.txt`（完整全量命令，复用 `run-full-tests.sh`），日志 `package/test-run.log` 随包作为盲测者的运行证据；执行失败按全量测试失败分流。分析期推断不出测试命令（不存在 package.json 且无测试套件、执行环境或测试脚本）时**主动询问用户是否跳过测试执行**：同意则 `test-command.txt` 写入字面 `SKIP`，盲测阶段不执行、§9 以用户确认替代 PASS 门禁，汇报声明"测试未执行"；不同意则用户提供命令或修复环境后继续。§9 全量测试仍是最终门禁（全量套件，本次尝试内恰 1 遍）。
 
 ### 快速导航与限时分析
 
@@ -90,7 +92,7 @@ infra:
 
 ```text
 .tmp/<task-id>/
-├── package/  ac-list.md, scope.md, test-command.txt, diff.txt, code/
+├── package/  ac-list.md, scope.md, test-command.txt, diff.txt, test-run.log, code/
 ├── review/   A.md, B.md, rebuttal.md（仅分歧时）
 └── full-tests.log
 ```
@@ -125,7 +127,7 @@ changed = 工作树 diff vs base ∪ 未跟踪文件，减掉 `.tmp/` 下所有�
 run-full-tests.sh --project-root <dir> --test-cmd <string> [--workdir <dir>] [--log-file <path>]
 ```
 
-`--test-cmd` 经 `sh -c` 执行（"全量"由主 agent 分析期确定并写入 `test-command.txt`，规则：必须覆盖仓库完整测试套件，禁止只跑新增测试）。相对 `--log-file` 始终以 `--project-root` 为基准解析，不受 `--workdir` 影响。输出与日志一致，末行状态：
+`--test-cmd` 经 `sh -c` 执行（"全量"由主 agent 分析期确定并写入 `test-command.txt`，规则：必须覆盖仓库完整测试套件，禁止只跑新增测试）。相对 `--log-file` 始终以 `--project-root` 为基准解析，不受 `--workdir` 影响。输出与日志一致，末行状态。`test-command.txt` 为字面 `SKIP`（用户同意跳过测试）时主 skill 不调用本脚本：
 
 | 退出码 | 状态行 |
 |---|---|

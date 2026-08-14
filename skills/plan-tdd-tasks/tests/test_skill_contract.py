@@ -288,9 +288,32 @@ class PlanTddTasksContractTest(unittest.TestCase):
 
     def test_cross_reference_corrections(self) -> None:
         self.assertIn("§9 最终提交与 §12 init 收尾提交是仅有的例外", SKILL)
-        self.assertIn("全量留给 §9", SKILL)
+        self.assertIn("全量留给 ⑦ 盲测阶段执行与 §9 最终门禁", SKILL)
         self.assertNotIn("§8 最终提交", SKILL)
-        self.assertNotIn("全量留给 §7", SKILL)
+
+    def test_blind_phase_executes_test_command(self) -> None:
+        section = SKILL.split("## 7. 盲测派发", 1)[1].split(
+            "## 8. 分歧处理", 1
+        )[0]
+        for value in (
+            "执行 test-command",
+            "test-run.log",
+            "run-full-tests: PASS",
+            "按 §9.4 分流",
+            "最多 2 次",
+            "超限停止并转人工",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(value, section)
+        self.assertIn("--log-file <package>/test-run.log", section)
+
+    def test_skip_test_execution_rules(self) -> None:
+        self.assert_all(
+            "主动询问用户是否跳过测试执行",
+            "字面 `SKIP`",
+            "提交门禁以用户显式同意替代",
+            "测试未执行",
+        )
 
     def test_init_mode_markers(self) -> None:
         self.assert_all(shared.INIT_TRIGGER, shared.INIT_NOT_A_TASK,

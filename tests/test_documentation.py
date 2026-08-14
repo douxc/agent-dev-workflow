@@ -88,6 +88,14 @@ class DocumentationContractTest(unittest.TestCase):
             shared.ENV_RETRY_CAP,
         )
 
+    def test_documents_blind_phase_test_execution_and_skip(self) -> None:
+        self.assert_readme_contains(
+            "package/test-run.log",
+            "字面 `SKIP`",
+            "主动询问用户是否跳过测试执行",
+            "最终门禁",
+        )
+
     def test_documents_script_interfaces_and_exit_codes(self) -> None:
         self.assert_readme_contains(
             shared.SCRIPT_CHECK_SCOPE,
