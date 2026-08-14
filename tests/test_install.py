@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import os
 import shutil
 import subprocess
@@ -402,6 +403,152 @@ class InstallScriptTest(unittest.TestCase):
         self.assert_success(result)
         self.assert_platforms_have_direct_copies()
         self.assertFalse((self.home / ".hermes").exists())
+
+    # --- user-level settings merge (plain mode) ---
+
+    def read_user_settings(self) -> dict:
+        return json.loads(
+            (self.home / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )
+
+    def test_plain_mode_merges_home_read_rules_into_user_settings(self) -> None:
+        for platform in PLATFORMS:
+            (self.home / platform).mkdir()
+
+        result = run_install(self.home)
+
+        self.assert_success(result)
+        settings = self.home / ".claude" / "settings.json"
+        self.assertTrue(settings.is_file(), msg="user settings not created")
+        self.assertIn(
+            f"merge user settings {self.real_home / '.claude' / 'settings.json'}",
+            result.stdout,
+        )
+        allow = self.read_user_settings()["permissions"]["allow"]
+        self.assertIn(shared.INIT_PERMISSION_HOME_CLAUDE, allow)
+        self.assertIn(shared.INIT_PERMISSION_HOME_CLAUDE_P, allow)
+
+    def test_user_settings_merge_preserves_existing_content(self) -> None:
+        claude_dir = self.home / ".claude"
+        claude_dir.mkdir()
+        settings = claude_dir / "settings.json"
+        settings.write_text(
+            json.dumps(
+                {
+                    "model": "deepseek-v4-flash",
+                    "env": {"FOO": "bar"},
+                    "permissions": {"allow": ["Bash(git:*)"]},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_install(self.home)
+
+        self.assert_success(result)
+        data = self.read_user_settings()
+        self.assertEqual(data["model"], "deepseek-v4-flash")
+        self.assertEqual(data["env"], {"FOO": "bar"})
+        allow = data["permissions"]["allow"]
+        self.assertIn("Bash(git:*)", allow)
+        self.assertIn(shared.INIT_PERMISSION_HOME_CLAUDE, allow)
+        self.assertIn(shared.INIT_PERMISSION_HOME_CLAUDE_P, allow)
+
+    def test_user_settings_merge_is_idempotent(self) -> None:
+        (self.home / ".claude").mkdir()
+
+        first = run_install(self.home)
+        self.assert_success(first)
+        second = run_install(self.home)
+        self.assert_success(second)
+
+        allow = self.read_user_settings()["permissions"]["allow"]
+        self.assertEqual(allow.count(shared.INIT_PERMISSION_HOME_CLAUDE), 1)
+        self.assertEqual(allow.count(shared.INIT_PERMISSION_HOME_CLAUDE_P), 1)
+
+    def test_user_settings_merge_skipped_when_claude_dir_missing(self) -> None:
+        result = run_install(self.home)
+
+        self.assert_success(result)
+        self.assertFalse((self.home / ".claude" / "settings.json").exists())
+        self.assertIn(
+            f"skip user settings merge ({self.real_home / '.claude'} missing)",
+            result.stdout,
+        )
+
+    def test_hermes_mode_touches_no_user_settings(self) -> None:
+        claude_dir = self.home / ".claude"
+        claude_dir.mkdir()
+        settings = claude_dir / "settings.json"
+        settings.write_text(json.dumps({"model": "keep"}), encoding="utf-8")
+        (self.hermes_profile_root() / "skills").mkdir(parents=True)
+
+        result = run_install(self.home, args=("-p", "coder"))
+
+        self.assert_success(result)
+        self.assertEqual(
+            settings.read_text(encoding="utf-8"), json.dumps({"model": "keep"})
+        )
+        self.assertNotIn("merge user settings", result.stdout)
+
+    def test_user_settings_merge_warns_and_continues_without_python3(
+        self,
+    ) -> None:
+        for platform in PLATFORMS:
+            (self.home / platform).mkdir()
+        bin_dir = self.home / "bin"
+        bin_dir.mkdir()
+        for tool in ("env", "bash", "cp", "rm", "mkdir", "dirname"):
+            target = shutil.which(tool)
+            self.assertIsNotNone(target, msg=f"tool not found in PATH: {tool}")
+            (bin_dir / tool).symlink_to(target)
+        env = os.environ.copy()
+        env["HOME"] = self.home
+        env["PATH"] = str(bin_dir)
+
+        result = subprocess.run(
+            [str(SCRIPT)],
+            cwd=SCRIPT.parent,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assert_success(result)
+        self.assertIn(
+            "warning: python3 not found; user-level settings merge skipped",
+            result.stdout,
+        )
+        self.assertFalse((self.home / ".claude" / "settings.json").exists())
+
+    def test_user_settings_corrupt_json_fails_closed(self) -> None:
+        claude_dir = self.home / ".claude"
+        claude_dir.mkdir()
+        settings = claude_dir / "settings.json"
+        settings.write_text("{not json", encoding="utf-8")
+        (claude_dir / "skills").mkdir()
+
+        result = run_install(self.home)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("failed to merge user settings", result.stderr)
+        self.assertEqual(settings.read_text(encoding="utf-8"), "{not json")
+
+    def test_user_settings_as_directory_fails_closed(self) -> None:
+        claude_dir = self.home / ".claude"
+        claude_dir.mkdir()
+        (claude_dir / "settings.json").mkdir()
+        (claude_dir / "skills").mkdir()
+
+        result = run_install(self.home)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("user settings path is not a file", result.stderr)
+        self.assertFalse(
+            (claude_dir / "skills" / SKILLS[0]).exists(),
+            msg="no skills installed after validation failure",
+        )
 
     def test_hermes_mode_skips_missing_profile_without_creating_it(self) -> None:
         result = run_install(self.home, args=("-p", "missing"))

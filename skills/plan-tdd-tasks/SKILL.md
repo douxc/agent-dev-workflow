@@ -237,5 +237,5 @@ ${SKILL_ROOT}/scripts/run-full-tests.sh --project-root <PROJECT_ROOT> --test-cmd
 ## 12. init 模式（初始化，非任务）
 
 - 仅字面 `/plan-tdd-tasks init`（skill args 恰为 `init`）进入 init 模式；其他调用均走普通任务流程。
-- 触发后必须完整读取 `${SKILL_ROOT}/references/init.md` 并按其规则执行。
+- 触发后必须完整读取 `${SKILL_ROOT}/references/init.md` 并按其规则执行；权限步骤必须先完成（写入 / 拒绝 / 不可用）再执行其余步骤。
 - **init 不是任务**：无 AC、scope、盲测、TDD 或 `.tmp/` 产物；不进入 §2–§10，结束时工作树必须 clean。

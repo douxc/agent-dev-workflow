@@ -185,7 +185,9 @@ cd agent-dev-workflow
 
 安装器把两个 skill 与两个 agent definitions 直接复制到每个**已存在**的平台根目录（`~/.claude`、`~/.claudeP`）的 `skills/` 与 `agents/` 下；平台根目录不存在时输出 `skip`，不会代为创建。源仓库是唯一 canonical 来源：不保留单独的 canonical 副本，不创建任何软链接；每次运行先删除旧目标再全新复制，可重复执行，不产生 `.backup.*`。
 
-安装器**自动移除旧版遗留**（`skills/plan-dev-tasks`、`skills/dev-with-tdd` 及其 agent 文件），不触碰其他任何 skill、agent 或配置。已废弃的 `~/.claudeD` 平台根（若存在）被整体移除。所有校验（HOME、源文件、平台容器）在首次删除前完成；容器若是普通文件而非目录则 fail closed。未知参数报错。
+安装器**自动移除旧版遗留**（`skills/plan-dev-tasks`、`skills/dev-with-tdd` 及其 agent 文件），不触碰其他任何 skill 或 agent。已废弃的 `~/.claudeD` 平台根（若存在）被整体移除。所有校验（HOME、源文件、平台容器、settings 路径）在首次删除前完成；容器若是普通文件而非目录则 fail closed。未知参数报错。
+
+安装器（plain 模式）还向用户级 `~/.claude/settings.json` 的 `permissions.allow` 合并两条读取规则 `` `Read(~/.claude/**)` `` 与 `` `Read(~/.claudeP/**)` ``，使任何项目里 skill reference 读取都不再弹窗；文件不存在时创建，保留既有内容，可重复执行且规则不重复。`~/.claude` 目录缺失时输出 `skip`，不代为创建；`python3` 不可用时输出 warning 并继续（不合并）；settings 内容损坏或路径是目录时 fail closed。`-p` 模式不触碰用户级 settings。
 
 `install.sh -p <profile>`（**互斥**模式，与 Claude 平台安装二选一）安装到 Hermes 命名 profile（`~/.hermes/profiles/<profile>/`）：只分发两个 skill（Hermes 无 .md agent 机制，子代理经 `delegate_task` 运行时定义），不触碰 Claude 平台；profile 目录不存在时输出 `skip`，不会代为创建。主 skill 按宿主选择 Claude Code `Agent(blind-review-tasks)` 或 Hermes `delegate_task`；宿主传输不可用、无法创建两个全新上下文或无法认证结果来源时 fail closed，即停止流程。
 
@@ -204,7 +206,7 @@ cd agent-dev-workflow
 
 在业务仓库首次使用前，可运行 `/plan-tdd-tasks init` 做一次性初始化（**仅字面触发**；自然语言请求一律走正常任务流程）：
 
-1. 读取 `references/permission-template.md`，将 `<PROJECT_ROOT>` 替换为项目根绝对路径去掉开头 `/` 的形式（配合模板 `//` 前缀）后展示完整规则——通用基线含 `` `Read(//<PROJECT_ROOT>/**)` ``、`` `Edit(//<PROJECT_ROOT>/**)` ``、`Bash(git:*)`、完整 `bash`/`sh`/`zsh` 放行、裸 `WebSearch`/`WebFetch`、`` `Read(~/.claude/**)` `` 与 `` `Read(~/.claudeP/**)` ``；按语言取舍含 `python3 -m unittest`/`npm test`/`cargo test`/`go test` 等测试命令；全部规则写入 allow、无保留询问分组；经用户同意后通过 `update-config` skill 写入 `.claude/settings.local.json` 的 `permissions.allow`（拒绝则跳过）；`update-config` 是可选宿主能力，本 bundle 无硬运行时依赖，skill 不可用时报告 `update-config unavailable; permission step skipped` 并继续其余步骤；
+1. 读取 `references/permission-template.md`，将 `<PROJECT_ROOT>` 替换为项目根绝对路径去掉开头 `/` 的形式（配合模板 `//` 前缀）后展示完整规则——通用基线含 `` `Read(//<PROJECT_ROOT>/**)` ``、`` `Edit(//<PROJECT_ROOT>/**)` ``、`Bash(git:*)`、完整 `bash`/`sh`/`zsh` 放行、裸 `WebSearch`/`WebFetch`、`` `Read(~/.claude/**)` `` 与 `` `Read(~/.claudeP/**)` ``；按语言取舍含 `python3 -m unittest`/`npm test`/`cargo test`/`go test` 等测试命令；全部规则写入 allow、无保留询问分组；经用户同意后通过 `update-config` skill 写入 `.claude/settings.local.json` 的 `permissions.allow`（拒绝则跳过）；`update-config` 是可选宿主能力，本 bundle 无硬运行时依赖，skill 不可用时报告 `update-config unavailable; permission step skipped` 并继续其余步骤；**完成闸门**：权限步骤必须先完成（已写入 / 用户拒绝 / update-config 不可用）才进入步骤 2–4，完成前不得读取 `project-map.md`、不得执行漂移判断；
 2. 生成 `project-map.md`（若不存在，按 `plan-tdd-tasks` skill §11.3 判定项目形态、自判类别，并总结领域对象及一跳直接生产者/直接消费者导航）；已存在时做**漂移判定**（核对机械可验证的现状事实，不做风格性改写），无漂移则报告无需更新，有漂移**经用户同意后更新**；数据库结构不能单独证明生产者，不确定的关系直接省略；
 3. 仅当 `.claude/settings.local.json` 已存在或本次写入时，机械校验它已被 gitignore；未忽略时追加到仓库 `.gitignore`，防止后续任务的范围检查误判；
 4. 展示将提交内容后一次 commit 收尾（地图生成为 `chore: init project-map`，地图更新为 `chore: update project-map`），工作树保持 clean。

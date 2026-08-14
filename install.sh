@@ -125,6 +125,12 @@ for target in "${targets[@]}"; do
   fi
 done
 
+# User-level settings merge (plain mode only) must not clobber a blocking
+# path: a directory at ~/.claude/settings.json would make the merge fail.
+if [ "$profile_set" -eq 0 ] && [ -d "$HOME_DIR/.claude/settings.json" ]; then
+  fail "user settings path is not a file: $HOME_DIR/.claude/settings.json"
+fi
+
 # Retire the retired .claudeD platform root: it is no longer an install
 # target, so an existing root is removed entirely rather than left stale.
 # -p mode owns only Hermes profiles and must not touch Claude platform roots.
@@ -180,6 +186,52 @@ remove_legacy_into() {
   done
 }
 
+# Merge the home read rules into the user-level Claude Code settings
+# (~/.claude/settings.json) so skill reference reads never prompt in any
+# project. Plain mode only: -p mode owns only Hermes profiles. Skips when
+# ~/.claude is missing (same convention as missing platform roots); warns
+# when python3 is unavailable; corrupt JSON fails closed unmodified.
+merge_user_settings() {
+  local settings_dir="$HOME_DIR/.claude"
+  local user_settings="$settings_dir/settings.json"
+
+  if [ ! -d "$settings_dir" ]; then
+    printf 'skip user settings merge (%s missing)\n' "$settings_dir"
+    return 0
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf 'warning: python3 not found; user-level settings merge skipped\n'
+    return 0
+  fi
+
+  python3 - "$user_settings" <<'PY' || fail "failed to merge user settings: $user_settings"
+import json
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)
+except FileNotFoundError:
+    data = {}
+except json.JSONDecodeError as exc:
+    sys.stderr.write(f"corrupt settings.json: {exc}\n")
+    sys.exit(1)
+
+rules = ("Read(~/.claude/**)", "Read(~/.claudeP/**)")
+allow = data.setdefault("permissions", {}).setdefault("allow", [])
+for rule in rules:
+    if rule not in allow:
+        allow.append(rule)
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2, ensure_ascii=False)
+    handle.write("\n")
+PY
+
+  printf 'merge user settings %s\n' "$user_settings"
+}
+
 for target in "${targets[@]}"; do
   if [ ! -d "$target" ]; then
     printf 'skip %s (platform root missing)\n' "$target"
@@ -192,5 +244,9 @@ for target in "${targets[@]}"; do
     install_agents_into "$target"
   fi
 done
+
+if [ "$profile_set" -eq 0 ]; then
+  merge_user_settings
+fi
 
 printf 'done: installed paired skills from %s\n' "$SCRIPT_DIR"

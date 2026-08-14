@@ -9,7 +9,7 @@
 
 ## 步骤
 
-1. **权限**：读取 `${SKILL_ROOT}/references/permission-template.md`，将模板中的 `<PROJECT_ROOT>` 替换为 `git rev-parse --show-toplevel` 输出的项目根绝对路径**去掉开头的 `/`** 后的形式（如 `/Users/me/repo` → `Users/me/repo`；模板自带 `//` 前缀是文件系统根锚点，单 `/` 会锚定到 settings 源位置）。替换后展示完整规则文本（通用基线含 `Read(//<PROJECT_ROOT>/**)`、`Edit(//<PROJECT_ROOT>/**)`、`Bash(git:*)`、完整 bash/sh/zsh 放行、裸 `WebSearch`/`WebFetch`、`Read(~/.claude/**)`、`Read(~/.claudeP/**)`；按语言取舍按检测到的项目形态选取测试命令），全部规则均写入 allow，无保留询问分组。经用户同意后调用 `update-config` skill，把规则写入 `.claude/settings.local.json` 的 `permissions.allow`。拒绝则跳过。若 skill 不可用，精确报告 `update-config unavailable; permission step skipped`，跳过权限写入并继续其余步骤。
+1. **权限**：读取 `${SKILL_ROOT}/references/permission-template.md`，将模板中的 `<PROJECT_ROOT>` 替换为 `git rev-parse --show-toplevel` 输出的项目根绝对路径**去掉开头的 `/`** 后的形式（如 `/Users/me/repo` → `Users/me/repo`；模板自带 `//` 前缀是文件系统根锚点，单 `/` 会锚定到 settings 源位置）。替换后展示完整规则文本（通用基线含 `Read(//<PROJECT_ROOT>/**)`、`Edit(//<PROJECT_ROOT>/**)`、`Bash(git:*)`、完整 bash/sh/zsh 放行、裸 `WebSearch`/`WebFetch`、`Read(~/.claude/**)`、`Read(~/.claudeP/**)`；按语言取舍按检测到的项目形态选取测试命令），全部规则均写入 allow，无保留询问分组。经用户同意后调用 `update-config` skill，把规则写入 `.claude/settings.local.json` 的 `permissions.allow`。拒绝则跳过。若 skill 不可用，精确报告 `update-config unavailable; permission step skipped`，跳过权限写入并继续其余步骤。**完成闸门**：步骤 1 必须先达到终态（已写入 / 用户拒绝 / update-config 不可用）；终态之前不得执行步骤 2–4 的任何动作——包括读取 `project-map.md`、执行漂移判断、gitignore 检查与任何 git 命令。
 2. **生成或更新项目地图**：
    - `project-map.md` 不存在：按 SKILL.md §11.3 判定项目形态并创建。这是地图的创建时机。
    - 文件存在：执行**漂移判定**，只核对路径、命令、结构、选型、存在性等**机械可验证**事实，不做**风格性改写**。无漂移时报告“地图最新，**无需更新**”；有漂移时展示小节与理由，**经用户同意后更新**，拒绝则跳过并报告。

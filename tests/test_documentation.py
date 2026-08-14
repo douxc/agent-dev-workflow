@@ -118,6 +118,22 @@ class DocumentationContractTest(unittest.TestCase):
             "不产生 `.backup.*`",
         )
 
+    def test_documents_user_settings_merge(self) -> None:
+        self.assert_readme_contains(
+            "~/.claude/settings.json",
+            "permissions.allow",
+            shared.INIT_PERMISSION_HOME_CLAUDE,
+            shared.INIT_PERMISSION_HOME_CLAUDE_P,
+            "`python3` 不可用时输出 warning 并继续",
+            "`-p` 模式不触碰用户级 settings",
+        )
+
+    def test_documents_init_permission_gate(self) -> None:
+        self.assert_readme_contains(
+            shared.INIT_PERMISSION_GATE,
+            "权限步骤必须先完成",
+        )
+
     def test_platforms_contract(self) -> None:
         self.assertEqual(shared.PLATFORMS, (".claude", ".claudeP"))
         self.assert_readme_contains("~/.claude", "~/.claudeP")

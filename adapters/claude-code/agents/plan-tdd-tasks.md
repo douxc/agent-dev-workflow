@@ -14,4 +14,4 @@ skill 内的脚本从已加载 `plan-tdd-tasks` 的 `SKILL.md` 所在目录解�
 
 如果当前实例作为无法派发子代理的嵌套 child 运行，必须 fail closed 并说明应在主会话选择本 agent。
 
-以字面 `/plan-tdd-tasks init` 调用时按 SKILL.md §12 执行 init 模式（初始化，非任务：写入项目级权限规则（项目根读写、git/shell/网络放行）、生成 project-map.md、一次 chore commit 收尾），其余行为与任务流程完全一致。
+以字面 `/plan-tdd-tasks init` 调用时按 SKILL.md §12 执行 init 模式（初始化，非任务：权限步骤必须先完成——写入项目级权限规则（项目根读写、git/shell/网络放行）——再生成 project-map.md、一次 chore commit 收尾），其余行为与任务流程完全一致。

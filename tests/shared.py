@@ -139,6 +139,7 @@ INIT_PERMISSION_GIT_ALL = "Bash(git:*)"
 INIT_SHELL_ALLOW = ("Bash(bash:*)", "Bash(sh:*)", "Bash(zsh:*)")
 INIT_PERMISSION_HOME_CLAUDE = "Read(~/.claude/**)"
 INIT_PERMISSION_HOME_CLAUDE_P = "Read(~/.claudeP/**)"
+INIT_PERMISSION_GATE = "**完成闸门**"
 
 # Installer targets and legacy removal. The retired .claudeD platform root
 # is no longer a target: install.sh removes an existing one entirely.

@@ -383,6 +383,12 @@ class PlanTddTasksContractTest(unittest.TestCase):
             INIT_REFERENCE.index("**收尾**"),
         )
 
+    def test_init_permission_step_is_completion_gate(self) -> None:
+        gate = INIT_REFERENCE.index(shared.INIT_PERMISSION_GATE)
+        self.assertLess(gate, INIT_REFERENCE.index("**生成或更新项目地图**"))
+        self.assertLess(gate, INIT_REFERENCE.index("**gitignore 校验**"))
+        self.assertLess(gate, INIT_REFERENCE.index("**收尾**"))
+
     def test_tdd_red_has_no_unverifiable_record_ritual(self) -> None:
         self.assertIn(shared.RED_CAUSE, SKILL)
         self.assertNotIn(shared.RED_RECORD, SKILL)
