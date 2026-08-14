@@ -30,20 +30,18 @@ class BlindReviewTasksContractTest(unittest.TestCase):
             "ac-list.md",
             "scope.md",
             "diff.txt",
-            "test-run.log",
             "code/",
             "不得读取 package 目录之外的 `.tmp` 内容",
             "verdict 每条证据必须指向包内路径",
         )
 
-    def test_test_run_log_is_optional_citable_evidence(self) -> None:
-        self.assert_all(
-            "可选运行证据",
-            "引述",
-            "日志缺失",
-            "不影响任何静态检查结论",
-            "唯一允许的运行结论",
-        )
+    def test_no_test_run_evidence_in_blind_review(self) -> None:
+        # Lock-in assertion: the blind reviewer is pure static — no run log
+        # input and no citable run conclusion. Guards against reintroducing
+        # the retired blind-phase test execution.
+        self.assertNotIn("test-run.log", SKILL)
+        self.assertNotIn("运行证据", SKILL)
+        self.assertNotIn("可选运行证据", SKILL)
 
     def test_check_1_ac_completeness(self) -> None:
         self.assert_all(
